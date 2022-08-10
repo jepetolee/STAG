@@ -11,7 +11,7 @@
 ### 기획
 자세한 프로젝트 기획은 다음 사이트 주소를 찾아주길 바란다.
 
-[스택 프로젝트 개요](https://jepetolee.github.io/developing%20report/2022/08/05/Blueprint/)
+[스택 프로젝트 개요](https://jepetolee.github.io/developing%20report/2022/08/05/STAG-1/)
 
 
 

@@ -45,7 +45,7 @@ def BuildNSaveImage(numpy_data, image_link):
       2. Volumes 
       3. Relative Strength Indicator (14)
       4. Bollinger Band (20 2)
-      5. Stochastic Indicator (9,3,3)
+      5. Stochastic Indicator KDJ (9,3,3)
     '''
 
     candlestick2_ohlc(axes[0], numpy_data['OpenPrice'], numpy_data['HighPrice'], numpy_data['LowPrice'],

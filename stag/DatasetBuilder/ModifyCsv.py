@@ -34,7 +34,7 @@ def UpdateCsv(time_interval, crypto_symbol, URL):
         dataframe = pd.read_csv('./appender.csv')
 
         csv_data.drop(['Unnamed: 0'], axis=1, inplace=True)
-        csv_data = csv_data.loc[:-2]
+        csv_data = csv_data.loc[0:csv_data.index[-2]]
         dataframe.drop(['Unnamed: 0'], axis=1, inplace=True)
 
         csv_data = pd.concat([csv_data, dataframe], ignore_index=True)
@@ -63,3 +63,6 @@ def TakeCsvData(URL):
     except FileNotFoundError:
         print(f"Csv file was not found in {URL}")
         return
+
+BuildCsv('1d','ETHUSDT','./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')
+UpdateCsv('1d','ETHUSDT','./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')

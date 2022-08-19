@@ -1,14 +1,4 @@
-# POSITION_TYPES
-POSITION_LONG = 'BUY'
-POSITION_SHORT = 'SELL'
-POSITION_HOLD = 'NONE'
-
-# LEVERAGE_TYPES
-LEVERAGE_HIGH = 5
-LEVERAGE_DEFAULT = 3
-LEVERAGE_LOW = 1
-
-# ERRORCODE
+# ERROR CODE
 NONE_AFFORDABLE = -1
 PRICE_CHECKING_FAILED = -2
 
@@ -35,7 +25,7 @@ class FutureTrader:
         if UsingTest:
             ApiKey, ApiSecret = GetTestApiKey()
         else:
-            ApiKey, ApiSecret = GetApikey()
+            ApiKey, ApiSecret = GetApiKey()
 
         self.Trader = Client(api_key=ApiKey, api_secret=ApiSecret, testnet=UsingTest)
         self.Account = NONE_AFFORDABLE

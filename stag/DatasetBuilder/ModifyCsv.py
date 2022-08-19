@@ -7,7 +7,6 @@ TIME_FIVE_MINUTE = '5m'
 
 import pandas as pd
 from binance.client import Client
-import numpy
 
 
 def BuildCsv(time_interval, crypto_symbol, URL):
@@ -19,23 +18,23 @@ def BuildCsv(time_interval, crypto_symbol, URL):
     return
 
 
-def UpdateCsv(crypto_symbol, URL):
+def UpdateCsv(time_interval, crypto_symbol, URL):
     client = Client(api_key='', api_secret='')
 
     try:
         csv_data = pd.read_csv(URL)
-        unreadable_time_data = csv_data['0'].copy()
-        readable_time_data = unreadable_time_data.to_numpy().astype('datetime64[ms]')
+        unreadable_time_data = csv_data['0'].copy().to_numpy()
+        readable_time_data = unreadable_time_data.astype('datetime64[ms]')
 
-        k_lines = client.futures_historical_klines(symbol=crypto_symbol, interval=readable_time_data[-1],
-                                                   start_str=START_DATE, limit=1000)
+        k_lines = client.futures_historical_klines(symbol=crypto_symbol, interval=time_interval,
+                                                   start_str=str(readable_time_data[-1]), limit=1000)
         dataframe = pd.DataFrame(k_lines)
         dataframe.to_csv('./appender.csv')
 
         dataframe = pd.read_csv('./appender.csv')
 
         csv_data.drop(['Unnamed: 0'], axis=1, inplace=True)
-        csv_data.drop([unreadable_time_data[-1]], axis=1, inplace=True)
+        csv_data = csv_data.loc[:-2]
         dataframe.drop(['Unnamed: 0'], axis=1, inplace=True)
 
         csv_data = pd.concat([csv_data, dataframe], ignore_index=True)

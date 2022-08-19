@@ -1,6 +1,6 @@
 from stag.DatasetBuilder import *
 
-URL = ''
+URL = 'C:/Users/Administrator/Documents/GitHub/STAG/stag/test/BTCUSDT-1.csv'
 
 
 def test():
@@ -15,6 +15,6 @@ def test():
         print("Taking Csv Data Doesn't Work.")
 
     try:
-        UpdateCsv('BTCUSDT', URL)
+        UpdateCsv(TIME_ONE_HOUR,'BTCUSDT', URL)
     finally:
         print("Updating Csv Doesn't Work.")

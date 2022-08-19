@@ -63,6 +63,3 @@ def TakeCsvData(URL):
     except FileNotFoundError:
         print(f"Csv file was not found in {URL}")
         return
-
-BuildCsv('1d','ETHUSDT','./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')
-UpdateCsv('1d','ETHUSDT','./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')

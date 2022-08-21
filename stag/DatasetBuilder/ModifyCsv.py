@@ -1,6 +1,6 @@
 START_DATE = "2018-01-01"
 TIME_ONE_DAY = '1d'
-TIME_ONE_HOUR = '1h'
+TIME_ONE_HOUR = '1H'
 TIME_FOUR_HOUR = '4h'
 TIME_FIFTEEN_MINUTE = '15m'
 TIME_FIVE_MINUTE = '5m'
@@ -54,8 +54,7 @@ def TakeCsvData(URL):
         readable_time_data = unreadable_time_data.to_numpy().astype('datetime64[ms]')
 
         csv_data = csv_data[['1', '2', '3', '4', '5']]
-        csv_data.rename(columns={"1": "OpenPrice", "2": "HighPrice", "3": "LowPrice",
-                                 "4": "ClosePrice", "5": "Volume"})
+        csv_data.columns = ["OpenPrice", "HighPrice","LowPrice","ClosePrice","Volume"]
         csv_data = csv_data.set_index(readable_time_data)
 
         return csv_data

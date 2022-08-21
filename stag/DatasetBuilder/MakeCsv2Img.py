@@ -8,7 +8,7 @@ from tqdm import trange
 sys.path.append('..')
 
 LeastNumber2Build = 199  # 0~199
-IMGFileMainRoot = ''
+IMGFileMainRoot = 'C:/Users/Administrator/Documents/GitHub/STAG/stag/DatasetBuilder/ImgDataStorage/ETHUSDT/1H/'
 
 
 def ImagedataSetBuilder(url):
@@ -30,7 +30,7 @@ def ImagedataSetBuilder(url):
 
 def BuildNSaveImage(numpy_data, image_link):
     # build grid spec pyplot
-    chart_figure = plt.figure(50, 40)
+    chart_figure = plt.figure(figsize=(50, 40))
     chart_grid = gridspec.GridSpec(5, 4)
     chart_figure.subplots_adjust(wspace=0.2, hspace=0.2)
 
@@ -49,7 +49,7 @@ def BuildNSaveImage(numpy_data, image_link):
     '''
 
     candlestick2_ohlc(axes[0], numpy_data['OpenPrice'], numpy_data['HighPrice'], numpy_data['LowPrice'],
-                      numpy_data['ClosePrice'], width=1, colorup='r', colordown='b')
+                      numpy_data['ClosePrice'], width=1, colorup='g', colordown='r')
     ClosePrices = numpy_data['ClosePrice'].copy()
 
     TwentyMovingAverage = ClosePrices.rolling(window=20).mean()
@@ -61,21 +61,21 @@ def BuildNSaveImage(numpy_data, image_link):
     axes[1].bar(numpy_data.index, numpy_data['Volume'], color='k', width=0.8, align='center')
 
     candlestick2_ohlc(axes[2], numpy_data['OpenPrice'], numpy_data['HighPrice'], numpy_data['LowPrice'],
-                      numpy_data['ClosePrice'], width=1, colorup='r', colordown='b')
+                      numpy_data['ClosePrice'], width=1, colorup='g', colordown='r')
     TwentyStandardDeviation = ClosePrices.rolling(window=20).std()
     BollingerBandUpper = TwentyMovingAverage + 2 * TwentyStandardDeviation
     BollingerBandLower = TwentyMovingAverage - 2 * TwentyStandardDeviation
-    axes[2].plot(numpy_data.index, TwentyMovingAverage, 'r', label='Moving Average 20')
-    axes[2].plot(numpy_data.index, BollingerBandUpper, 'g', label='BollingerBandUpper 20 +2')
+    axes[2].plot(numpy_data.index, TwentyMovingAverage, 'y', label='Moving Average 20')
+    axes[2].plot(numpy_data.index, BollingerBandUpper, 'k', label='BollingerBandUpper 20 +2')
     axes[2].plot(numpy_data.index, BollingerBandLower, 'b', label='BollingerBandLower 20 -2')
 
     variance = ClosePrices - ClosePrices.shift(1)
-    rise_width = variance.where(variance > 0, 0)
-    degrade_width = variance.where(variance < 0, 0)
-    AverageUp = rise_width.ewm(aplha=1 / 14, min_periods=14).mean()
-    AverageDown = degrade_width.ewm(aplha=1 / 14, min_periods=14).mean()
+    rise_width = variance.where(variance >= 0, 0)
+    degrade_width = variance.where(variance < 0, 0).abs()
+    AverageUp = rise_width.ewm(alpha=1 / 14, min_periods=14).mean()
+    AverageDown = degrade_width.ewm(alpha=1 / 14, min_periods=14).mean()
     RSI = AverageUp / (AverageUp + AverageDown) * 100
-    axes[3].bar(numpy_data.index, RSI, label='RSI 14')
+    axes[3].plot(numpy_data.index, RSI, label='RSI 14')
 
     HighPrices = numpy_data['HighPrice'].copy()
     HighInDays = HighPrices.rolling(window=9, min_periods=1).max()
@@ -92,3 +92,6 @@ def BuildNSaveImage(numpy_data, image_link):
     plt.savefig(image_link, dpi=100)
     plt.close('all')
     return
+
+
+ImagedataSetBuilder('./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')

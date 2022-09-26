@@ -29,7 +29,7 @@ class ObservationDecoder(jit.ScriptModule):
         super().__init__()
         self.embedding_size = embedding_size
         self.FullyConnected = nn.Linear(belief_size + state_size, embedding_size)
-        self.Conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
+        self.Conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2    )
         self.Conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
         self.Conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
         self.Conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)

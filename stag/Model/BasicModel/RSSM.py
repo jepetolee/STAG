@@ -36,14 +36,14 @@ class TransitionModel(jit.ScriptModule):
 
     @jit.script_method
     def forward(self, previous_actions: torch.Tensor, stochastic_output: torch.Tensor,
-                determinant: torch.Tensor):
+                DeterministicValue: torch.Tensor):
         PreviousOutputForRNN = F.elu(self.RnnInputModel(torch.cat([previous_actions, stochastic_output], dim=-1)))
-        DeterminantState = self.GruCell(PreviousOutputForRNN, determinant)
-        mean, standard_deviation = torch.chunk(self.StochasticPriorModel(DeterminantState), 2, dim=-1)
+        DeterministicState = self.GruCell(PreviousOutputForRNN, DeterministicValue)
+        mean, standard_deviation = torch.chunk(self.StochasticPriorModel(DeterministicState), 2, dim=-1)
         standard_deviation = F.softplus(standard_deviation) + 0.1
         DistributedResult = Distribution.Normal(mean, standard_deviation)
         Stochasticstate = DistributedResult.rsample()
-        return mean, standard_deviation, Stochasticstate, DeterminantState
+        return mean, standard_deviation, Stochasticstate, DeterministicState
 
 
 class RepresentationModel(jit.ScriptModule):
@@ -73,8 +73,8 @@ class RepresentationModel(jit.ScriptModule):
 
     @jit.script_method
     def forward(self, observation_embed: torch.Tensor, PreviousAction: torch.Tensor,
-                StochasticState: torch.Tensor, DeterminantState: torch.Tensor):
-        prior_state = self.Transition(PreviousAction, StochasticState, DeterminantState)
+                StochasticState: torch.Tensor, DeterministicState: torch.Tensor):
+        prior_state = self.Transition(PreviousAction, StochasticState, DeterministicState)
         PreviousForStochastic = torch.cat([prior_state[3], observation_embed], -1)
         mean, std = torch.chunk(self.StochasticPriorModel(PreviousForStochastic), 2, dim=-1)
         std = F.softplus(std) + 0.1
@@ -83,7 +83,7 @@ class RepresentationModel(jit.ScriptModule):
         return prior_state, mean, std, stochastic_state, prior_state[3]
 
 
-class RollingModel(jit.ScriptModule):
+class RolloutModel(jit.ScriptModule):
     def __init__(self, obs_embed_size, action_size, stochastic_size, deterministic_size, hidden_size):
         super().__init__()
         self.Representation = RepresentationModel(obs_embed_size, action_size, stochastic_size,
@@ -91,6 +91,39 @@ class RollingModel(jit.ScriptModule):
         self.Transition = TransitionModel(action_size, stochastic_size, deterministic_size, hidden_size)
 
     def forward(self, steps: int, observation_embed: torch.Tensor, action: torch.Tensor,
-                action_size: torch.Tensor, stochastic_size: torch.Tensor, deterministic_size: torch.Tensor,
-                hidden_size: torch.Tensor):
-        
+                action_size: torch.Tensor, mean: torch.Tensor, standard_deviation: torch.Tensor,
+                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
+
+        priors = []
+        posteriors = []
+        for t in range(steps):
+            prior_state, mean,standard_deviation, Stochasticstate, DeterministicState = self.RepresentationModel(observation_embed[t], action[t], action_size,
+                                                                     mean,standard_deviation, Stochasticstate, DeterministicState)
+            priors.append(prior_state)
+            posteriors.append((mean,standard_deviation, Stochasticstate,DeterministicState))
+
+        return priors, posteriors
+
+    def RolloutTransition(self, steps: int, action: torch.Tensor, mean: torch.Tensor, standard_deviation: torch.Tensor,
+                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
+
+        priors = []
+        for t in range(steps):
+            state = self.TransitionModel(action[t], mean, standard_deviation, Stochasticstate, DeterministicState)
+            priors.append(state)
+        return priors
+
+    def RolloutPolicy(self, steps: int, policy,  mean: torch.Tensor, standard_deviation: torch.Tensor,
+                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
+
+
+        next_states = []
+        actions = []
+       # state = buffer_method(state, 'detach')
+        for t in range(steps):
+            action, _ = policy( mean, standard_deviation, Stochasticstate, DeterministicState)
+            state = self.TransitionModel(action,  mean, standard_deviation, Stochasticstate, DeterministicState)
+            next_states.append(state)
+            actions.append(action)
+        actions = torch.stack(actions, dim=0)
+        return next_states, actions

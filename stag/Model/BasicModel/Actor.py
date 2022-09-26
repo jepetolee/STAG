@@ -5,8 +5,8 @@ from torch import nn, jit
 
 from torch.distributions.normal import Normal
 from torch.distributions.transformed_distribution import TransformedDistribution
-from Distribution import TanhBijector, SampleDist
-
+from Distribution import SampleDist
+from torch.distributions import TanhTransform
 
 class ActorModel(jit.ScriptModule):
     def __init__(self, belief_size, state_size, hidden_size, action_size,
@@ -41,7 +41,7 @@ class ActorModel(jit.ScriptModule):
     def get_action(self, belief, state, Det=False):
         MeanOfAction, ActionStd = self.forward(belief, state)
         NormalizedAction = Normal(MeanOfAction, ActionStd)
-        DistributedAction = TransformedDistribution(NormalizedAction, TanhBijector())
+        DistributedAction = TransformedDistribution(NormalizedAction, TanhTransform())
         OneDimensionedAction = torch.distributions.Independent(DistributedAction, 1)
         Distribution = SampleDist(OneDimensionedAction)
         if Det:

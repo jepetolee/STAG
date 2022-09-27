@@ -21,6 +21,22 @@ class ObservationEncoder(jit.ScriptModule):
         Output = self.FCLayer(Hidden4)
         return Output
 
+    @staticmethod
+    def ShapeAfterConv(h_in, padding, kernel_size, stride):
+        ShapeAfterCNN = list()
+        for x in h_in:
+            ShapeAfterCNN.append(int((x + 2. * padding - (kernel_size - 1.) - 1.) / stride + 1.))
+        return tuple(ShapeAfterCNN)
+
+    @property
+    def embed_size(self):
+        conv1_shape = self.ShapeAfterConv(self.shape[1:], 0, 4, self.stride)
+        conv2_shape = self.ShapeAfterConv(conv1_shape, 0, 4, self.stride)
+        conv3_shape = self.ShapeAfterConv(conv2_shape, 0, 4, self.stride)
+        conv4_shape = self.ShapeAfterConv(conv3_shape, 0, 4, self.stride)
+        embed_size = 8 * self.depth * np.prod(conv4_shape).item()
+        return embed_size
+
 
 class ObservationDecoder(jit.ScriptModule):
     __constants__ = ['embedding_size']
@@ -29,7 +45,7 @@ class ObservationDecoder(jit.ScriptModule):
         super().__init__()
         self.embedding_size = embedding_size
         self.FullyConnected = nn.Linear(belief_size + state_size, embedding_size)
-        self.Conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2    )
+        self.Conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
         self.Conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
         self.Conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
         self.Conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)

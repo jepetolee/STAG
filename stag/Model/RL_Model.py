@@ -5,31 +5,30 @@ import torch.nn as nn
 from BasicModel.Actor import ActorModel
 from BasicModel.EncoderNDecoder import ObservationDecoder, ObservationEncoder
 from BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
-
+from BasicModel.DenseModel import DenseModel
 
 class TradingModel(nn.Module):
     def __init__(self, action_shape, stochastic_size=30,deterministic_size=200,
                  hidden_size=200, image_shape=(3, 500, 500), action_hidden_size=200,
                  action_layers=3, action_dist='one_hot', reward_shape=(1,),
-                 reward_layers=3, reward_hidden=300, value_shape=(1,),
-                 value_layers=3, value_hidden=200):
+                 reward_hidden=300, value_shape=(1,), value_hidden=200):
         super().__init__()
         self.observation_encoder = ObservationEncoder()
         encoder_embed_size = self.observation_encoder.embed_size
         decoder_embed_size = stochastic_size + deterministic_size
-        self.observation_decoder = ObservationDecoder(embed_size=decoder_embed_size, shape=image_shape)
+        self.observation_decoder = ObservationDecoder(embedding_size=decoder_embed_size)
         self.action_shape = action_shape
         output_size = np.prod(action_shape)
         self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size)
-        self.representation = RepresentationModel(self.transition, encoder_embed_size, output_size, stochastic_size,
+        self.representation = RepresentationModel(encoder_embed_size, output_size, stochastic_size,
                                                  deterministic_size, hidden_size)
         self.rollout = RolloutModel(self.representation, self.transition)
         feature_size = stochastic_size + deterministic_size
         self.action_size = output_size
         self.action_dist = action_dist
         self.action_decoder = ActorModel(output_size, feature_size, action_hidden_size, action_layers, action_dist)
-        self.reward_model = DenseModel(feature_size, reward_shape, reward_layers, reward_hidden)
-        self.value_model = DenseModel(feature_size, value_shape, value_layers, value_hidden)
+        self.reward_model = DenseModel(feature_size, reward_shape, reward_hidden)
+        self.value_model = DenseModel(feature_size, value_shape,  value_hidden)
         self.stochastic_size = stochastic_size
         self.deterministic_size = deterministic_size
 

@@ -1,7 +1,7 @@
 import torch
 from torch import nn, jit
 from torch.nn import functional as F
-from typing import List, Optional
+from DataStructure import RSSMState, stack_states
 import torch.distributions as Distribution
 
 
@@ -35,15 +35,15 @@ class TransitionModel(jit.ScriptModule):
                 torch.zeros(1, self.stoch_size, **kwargs))
 
     @jit.script_method
-    def forward(self, previous_actions: torch.Tensor, stochastic_output: torch.Tensor,
-                DeterministicValue: torch.Tensor):
-        PreviousOutputForRNN = F.elu(self.RnnInputModel(torch.cat([previous_actions, stochastic_output], dim=-1)))
-        DeterministicState = self.GruCell(PreviousOutputForRNN, DeterministicValue)
+    def forward(self, previous_actions: torch.Tensor, previous_state: RSSMState):
+        PreviousOutputForRNN = F.elu(
+            self.RnnInputModel(torch.cat([previous_actions, previous_state.stochastic_state], dim=-1)))
+        DeterministicState = self.GruCell(PreviousOutputForRNN, previous_state.deterministic_state)
         mean, standard_deviation = torch.chunk(self.StochasticPriorModel(DeterministicState), 2, dim=-1)
         standard_deviation = F.softplus(standard_deviation) + 0.1
         DistributedResult = Distribution.Normal(mean, standard_deviation)
-        Stochasticstate = DistributedResult.rsample()
-        return mean, standard_deviation, Stochasticstate, DeterministicState
+        StochasticState = DistributedResult.rsample()
+        return RSSMState(mean, standard_deviation, StochasticState, DeterministicState)
 
 
 class RepresentationModel(jit.ScriptModule):
@@ -66,21 +66,21 @@ class RepresentationModel(jit.ScriptModule):
 
     @jit.script_method
     def initial_state(self, **kwargs):
-        return (torch.zeros(1, self.stoch_size, **kwargs),
-                torch.zeros(1, self.stoch_size, **kwargs),
-                torch.zeros(1, self.stoch_size, **kwargs),
-                torch.zeros(1, self.stoch_size, **kwargs))
+        return RSSMState(torch.zeros(1, self.stoch_size, **kwargs),
+                         torch.zeros(1, self.stoch_size, **kwargs),
+                         torch.zeros(1, self.stoch_size, **kwargs),
+                         torch.zeros(1, self.stoch_size, **kwargs))
 
     @jit.script_method
-    def forward(self, observation_embed: torch.Tensor, PreviousAction: torch.Tensor,
-                StochasticState: torch.Tensor, DeterministicState: torch.Tensor):
-        prior_state = self.Transition(PreviousAction, StochasticState, DeterministicState)
-        PreviousForStochastic = torch.cat([prior_state[3], observation_embed], -1)
+    def forward(self, observation_embed: torch.Tensor, PreviousAction: torch.Tensor, previous_state: RSSMState):
+        prior_state = self.Transition(PreviousAction, previous_state)
+        PreviousForStochastic = torch.cat([prior_state.deterministic_state, observation_embed], -1)
         mean, std = torch.chunk(self.StochasticPriorModel(PreviousForStochastic), 2, dim=-1)
         std = F.softplus(std) + 0.1
         dist = nn.ELU(mean, std)
         stochastic_state = dist.rsample()
-        return prior_state, mean, std, stochastic_state, prior_state[3]
+        posterior_state = RSSMState(mean, std, stochastic_state, prior_state.deterministic_state)
+        return prior_state, posterior_state
 
 
 class RolloutModel(jit.ScriptModule):
@@ -90,40 +90,36 @@ class RolloutModel(jit.ScriptModule):
                                                   deterministic_size, hidden_size)
         self.Transition = TransitionModel(action_size, stochastic_size, deterministic_size, hidden_size)
 
-    def forward(self, steps: int, observation_embed: torch.Tensor, action: torch.Tensor,
-                action_size: torch.Tensor, mean: torch.Tensor, standard_deviation: torch.Tensor,
-                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
+    def forward(self, steps: int, observation_embed: torch.Tensor, action: torch.Tensor, previous_state: RSSMState):
 
         priors = []
         posteriors = []
         for t in range(steps):
-            prior_state, mean,standard_deviation, Stochasticstate, DeterministicState = self.RepresentationModel(observation_embed[t], action[t], action_size,
-                                                                     mean,standard_deviation, Stochasticstate, DeterministicState)
+            prior_state, posterior_state = self.RepresentationModel(observation_embed[t], action[t], previous_state)
             priors.append(prior_state)
-            posteriors.append((mean,standard_deviation, Stochasticstate,DeterministicState))
+            posteriors.append(posterior_state)
 
-        return priors, posteriors
+        prior = stack_states(priors, dim=0)
+        post = stack_states(posteriors, dim=0)
+        return prior, post
 
-    def RolloutTransition(self, steps: int, action: torch.Tensor, mean: torch.Tensor, standard_deviation: torch.Tensor,
-                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
+    def RolloutTransition(self, steps: int, action: torch.Tensor, previous_state: RSSMState):
 
         priors = []
         for t in range(steps):
-            state = self.TransitionModel(action[t], mean, standard_deviation, Stochasticstate, DeterministicState)
+            state = self.TransitionModel(action[t], previous_state)
             priors.append(state)
-        return priors
+        return stack_states(priors, dim=0)
 
-    def RolloutPolicy(self, steps: int, policy,  mean: torch.Tensor, standard_deviation: torch.Tensor,
-                Stochasticstate: torch.Tensor, DeterministicState: torch.Tensor):
-
+    def RolloutPolicy(self, steps: int, policy, previous_state: RSSMState):
 
         next_states = []
         actions = []
-       # state = buffer_method(state, 'detach')
         for t in range(steps):
-            action, _ = policy( mean, standard_deviation, Stochasticstate, DeterministicState)
-            state = self.TransitionModel(action,  mean, standard_deviation, Stochasticstate, DeterministicState)
+            action, _ = policy(previous_state)
+            state = self.TransitionModel(action, previous_state)
             next_states.append(state)
             actions.append(action)
+        next_states = stack_states(next_states, dim=0)
         actions = torch.stack(actions, dim=0)
         return next_states, actions

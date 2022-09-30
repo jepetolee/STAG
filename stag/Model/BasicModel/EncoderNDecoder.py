@@ -1,6 +1,7 @@
 import torch
 from torch import nn, jit
 from torch.nn import functional as F
+import numpy as np
 
 
 class ObservationEncoder(jit.ScriptModule):

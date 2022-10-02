@@ -42,10 +42,10 @@ class ObservationEncoder(jit.ScriptModule):
 class ObservationDecoder(jit.ScriptModule):
     __constants__ = ['embedding_size']
 
-    def __init__(self, belief_size, state_size, embedding_size):
+    def __init__(self, stochastic_size, deterministic_size, embedding_size):
         super().__init__()
         self.embedding_size = embedding_size
-        self.FullyConnected = nn.Linear(belief_size + state_size, embedding_size)
+        self.FullyConnected = nn.Linear(stochastic_size + deterministic_size, embedding_size)
         self.Conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
         self.Conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
         self.Conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
@@ -61,3 +61,10 @@ class ObservationDecoder(jit.ScriptModule):
         AfterConv3 = F.elu(self.Conv3(AfterConv2))
         observation = self.Conv4(AfterConv3)
         return observation
+
+    @staticmethod
+    def ShapeAfterConv(h_in, padding, kernel_size, stride):
+        ShapeAfterCNN = list()
+        for x in h_in:
+            ShapeAfterCNN.append(int((x + 2. * padding - (kernel_size - 1.) - 1.) / stride + 1.))
+        return tuple(ShapeAfterCNN)

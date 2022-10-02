@@ -1,30 +1,29 @@
-import numpy as np
 import torch
 import torch.nn as nn
 
 from BasicModel.Actor import ActorModel
+from BasicModel.DataStructure import RSSMState
+from BasicModel.DenseModel import DenseModel
 from BasicModel.EncoderNDecoder import ObservationDecoder, ObservationEncoder
 from BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
-from BasicModel.DenseModel import DenseModel
-from BasicModel.DataStructure import RSSMState
 
 
 class TradingModel(nn.Module):
-    def __init__(self, action_shape, stochastic_size=30, deterministic_size=200,
-                 hidden_size=200, image_shape=(3, 500, 500), action_hidden_size=200,
+    def __init__(self, output_size, stochastic_size=30, deterministic_size=200,
+                 hidden_size=200, action_hidden_size=200,
                  action_layers=3, action_dist='one_hot', reward_shape=(1,),
                  reward_hidden=300, value_shape=(1,), value_hidden=200):
         super().__init__()
         self.observation_encoder = ObservationEncoder()
-        encoder_embed_size = self.observation_encoder.embed_size
-        decoder_embed_size = stochastic_size + deterministic_size
-        self.observation_decoder = ObservationDecoder(embedding_size=decoder_embed_size)
-        self.action_shape = action_shape
-        output_size = np.prod(action_shape)
+        encoder_embed_size = self.observation_encoder.embed_size()
+        embedding_size = 10000
+        self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size)
+
         self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size)
         self.representation = RepresentationModel(encoder_embed_size, output_size, stochastic_size,
                                                   deterministic_size, hidden_size)
-        self.rollout = RolloutModel()
+        self.rollout = RolloutModel(encoder_embed_size, output_size, stochastic_size,
+                                    deterministic_size, hidden_size)
         feature_size = stochastic_size + deterministic_size
         self.action_size = output_size
         self.action_dist = action_dist

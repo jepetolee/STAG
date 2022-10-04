@@ -95,7 +95,7 @@ class RolloutModel(jit.ScriptModule):
         priors = []
         posteriors = []
         for t in range(steps):
-            prior_state, posterior_state = self.RepresentationModel(observation_embed[t], action[t], previous_state)
+            prior_state, posterior_state = self.Representation(observation_embed[t], action[t], previous_state)
             priors.append(prior_state)
             posteriors.append(posterior_state)
 

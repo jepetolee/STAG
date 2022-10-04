@@ -16,7 +16,8 @@ LEVERAGE_HIGH = 5
 LEVERAGE_DEFAULT = 3
 LEVERAGE_LOW = 1
 
-# CRYPTO TYPES
+
+# CRYPTOTYPES
 BTC_DECIMAL_POINT = 1000
 ETH_DECIMAL_POINT = 1
 
@@ -24,10 +25,10 @@ THERES_NO_CRYPTO = 'NONE'
 
 
 class RL_Agent:
-    def __init__(self, leverage, test_mode=True):
+    def __init__(self, leverage, testmode=true):
         self.Agent = FutureTrader()
         self.RealTrader = self.Agent.Trader
-        self.IsTestMode = test_mode
+        self.IsTestMode = testmode
         self.Leverage = leverage
 
         self.PercentFromOriginal = 100
@@ -43,11 +44,14 @@ class RL_Agent:
 
     def Trade(self, crypto_name, position, crypto_decimal_points):
         self.CurrentCryptoName = crypto_name
-        self.PositionPrice = FutureTrader.CurrentPrice(self.CurrentCryptoName, self.CurrentCryptoName)
+
+        self.PositionPrice = FutureTrader.CurrentPrice(self.CurrentCryptoName)
+
         self.CurrentPosition = position
         self.TradeCounts += 1
 
         if not self.IsTestMode:
+
             self.CurrentCallingSize = self.count_token_size(self.Leverage, self.Agent.CallableUsdt(),
                                                             crypto_decimal_points)
             self.RealTrader.futures_create_order(symbol=self.CurrentCryptoName, type='LIMIT', timeInForce='GTC',

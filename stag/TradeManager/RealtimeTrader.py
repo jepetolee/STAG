@@ -1,10 +1,10 @@
-# ERROR CODE
-NONE_AFFORDABLE = -1
-PRICE_CHECKING_FAILED = -2
-
 from time import sleep
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
+
+# ERRORCODE
+NONE_AFFORDABLE = -1
+PRICE_CHECKING_FAILED = -2
 
 
 def GetApiKey():

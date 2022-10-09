@@ -65,11 +65,11 @@ class RepresentationModel(jit.ScriptModule):
         )
 
     @jit.script_method
-    def initial_state(self, **kwargs):
-        return RSSMState(torch.zeros(1, self.stoch_size, **kwargs),
-                         torch.zeros(1, self.stoch_size, **kwargs),
-                         torch.zeros(1, self.stoch_size, **kwargs),
-                         torch.zeros(1, self.stoch_size, **kwargs))
+    def initial_state(self, BatchSize, **kwargs):
+        return RSSMState(torch.zeros(BatchSize, self.stoch_size, **kwargs),
+                         torch.zeros(BatchSize, self.stoch_size, **kwargs),
+                         torch.zeros(BatchSize, self.stoch_size, **kwargs),
+                         torch.zeros(BatchSize, self.stoch_size, **kwargs))
 
     @jit.script_method
     def forward(self, observation_embed: torch.Tensor, PreviousAction: torch.Tensor, previous_state: RSSMState):

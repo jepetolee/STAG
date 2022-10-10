@@ -30,7 +30,7 @@ def ImagedataSetBuilder(url):
 
 def BuildNSaveImage(numpy_data, image_link):
     # build grid spec pyplot
-    chart_figure = plt.figure(figsize=(50, 40))
+    chart_figure = plt.figure(figsize=(25, 20))
     chart_grid = gridspec.GridSpec(5, 4)
     chart_figure.subplots_adjust(wspace=0.2, hspace=0.2)
 
@@ -92,6 +92,3 @@ def BuildNSaveImage(numpy_data, image_link):
     plt.savefig(image_link, dpi=100)
     plt.close('all')
     return
-
-
-ImagedataSetBuilder('./CsvStorage/ETHUSDT/ETHUSDT_1H.csv')

@@ -17,6 +17,7 @@ class TradingModel(nn.Module):
         self.observation_encoder = ObservationEncoder()
         encoder_embed_size = self.observation_encoder.embed_size()
         embedding_size = 10000
+        #need to check embedding size
         self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size)
 
         self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size)

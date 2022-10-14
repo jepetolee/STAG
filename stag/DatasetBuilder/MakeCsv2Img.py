@@ -4,14 +4,15 @@ from mpl_finance import candlestick2_ohlc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from tqdm import trange
+import cv2 as cv
 
 sys.path.append('..')
 
 LeastNumber2Build = 199  # 0~199
-IMGFileMainRoot = 'C:/Users/Administrator/Documents/GitHub/STAG/stag/DatasetBuilder/ImgDataStorage/ETHUSDT/1H/'
+IMGFileMainRoot = 'C:/Users/Administrator/Documents/GitHub/STAG/stag/DatasetBuilder/ImgDataStorage/'
 
 
-def ImagedataSetBuilder(url):
+def build_single_candlestick_images(crypto_name, url):
     numpy_data = TakeCsvData(url)
 
     data_size = numpy_data.shape[0]
@@ -24,7 +25,7 @@ def ImagedataSetBuilder(url):
         processed_data.reset_index(inplace=True)
         processed_data.index += 1
 
-        image_link = IMGFileMainRoot + str(starting_x + 1) + 'jpg'  # 이미지 파일 링크 선정
+        image_link = IMGFileMainRoot + crypto_name + '/' + str(starting_x + 1) + 'jpg'  # 이미지 파일 링크 선정
         BuildNSaveImage(processed_data, image_link)
 
 
@@ -91,4 +92,8 @@ def BuildNSaveImage(numpy_data, image_link):
 
     plt.savefig(image_link, dpi=100)
     plt.close('all')
+    return
+
+
+def synthesize_image():
     return

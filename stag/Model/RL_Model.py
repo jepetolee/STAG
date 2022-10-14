@@ -36,11 +36,11 @@ class TradingModel(nn.Module):
 
     def forward(self, observation: torch.Tensor, prev_action: torch.Tensor = None, prev_state: RSSMState = None):
         state = self.get_state_representation(observation, prev_action, prev_state)
-        action, action_dist = self.policy(state)
+        action, action_distribution = self.policy(state)
 
         value = self.value_model(state.get_feature())
         reward = self.reward_model(state.get_feature())
-        return action, action_dist, value, reward, state
+        return action, action_distribution, value, reward, state
 
     def policy(self, state: RSSMState):
         feature = state.get_feature()

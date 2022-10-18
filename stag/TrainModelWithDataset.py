@@ -18,4 +18,5 @@ def TrainWithDataset(crypto_name, device='cpu', train_steps_per_trade=10):
 
         virtual_trader.check_position(action)
         virtual_trader.check_price_type(close_price_in_csv_data)
-        reward = virtual_trader.get_reward()
+        reward,DoesDone = virtual_trader.get_reward()
+

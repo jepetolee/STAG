@@ -1,10 +1,9 @@
 from stag.TradeManager import *
 import numpy as np
 
-BANKRUPT_SCORE = -100
-BENEFIT_SCORE = 10
-LOSS_SCORE = -15
-NONE_SCORE = 0
+BANKRUPT_CONSTANT = -100
+BENEFIT_CONSTANT = 1
+LOSS_CONSTANT = -2
 
 # POSITION_TYPES
 POSITION_LONG = 'BUY'
@@ -47,7 +46,7 @@ class RL_Agent:
         self.IsTestMode = testmode
         self.Leverage = leverage
 
-        self.PercentFromOriginal = 100
+        self.PercentState = 100
         self.TradeCounts = 0
         self.WinCounts = 0
 
@@ -96,24 +95,54 @@ class RL_Agent:
         return float(calling_size)
 
     def get_reward(self):
-        return
+        if self.CurrentPosition is POSITION_LONG:
+            revenue = 0.9998*self.CurrentPrice - self.PositionPrice
+        elif self.CurrentPosition is POSITION_SHORT:
+            revenue = 0.9998*self.PositionPrice - self.CurrentPrice
+        elif self.CurrentPosition is POSITION_HOLD:
+            revenue = -0.0025 # least loss that prevent non-decision phenomenon
+
+        profit_percent = revenue / self.PositionPrice * 100
+        conversion_constant = profit_percent / 5
+
+        self.checking_state()
+
+        """
+        <--THE THINGS NEED TO ADD-->
+         
+         1. checking State's bankrupt and adding BANKRUPT_CONSTANT when it bankrupts
+         2. counting self.PercentState
+         3. adding self.WinCounts
+         4. DoesDone points that can stack torch tensors to train
+         """
+
+        if self.CheckActionChanged is POSITION_CHANGED:
+            self.CheckActionChanged = POSITION_UNCHANGED
+            if conversion_constant >=0:
+                reward = conversion_constant*BENEFIT_CONSTANT
+            else:
+                reward = conversion_constant*LOSS_CONSTANT
+        else:
+            reward = conversion_constant
+        return reward, DoesDone
 
     def check_price_type(self, price):
         if self.CheckActionChanged is POSITION_CHANGED:
             self.PositionPrice = price
-            self.CheckActionChanged = POSITION_UNCHANGED
         else: pass
         self.CurrentPrice = price
 
     def check_position(self, action):
         if self.CheckActionChanged is UNSTARTED:
             self.CheckActionChanged = POSITION_CHANGED
+            self.TradeCounts+=1
             return self.decide_position(action)
         elif ChangePosition2Integer(self.CurrentPosition) == action.item():
             self.CheckActionChanged = POSITION_UNCHANGED
             return self.CurrentPosition
         else:
             self.CheckActionChanged = POSITION_CHANGED
+            self.TradeCounts += 1
             return self.decide_position(action)
 
     def decide_position(self, action):

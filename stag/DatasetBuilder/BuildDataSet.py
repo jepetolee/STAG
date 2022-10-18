@@ -5,15 +5,14 @@ import torchvision.transforms as transforms
 '''
 ex> 'C:/Users/Adminstrator/DataStorage/BTC_USDT/'
 '''
-
-
-def detailed_dataset_root(crypto_name):
-    return IMGFileMainRoot + URL_Slash + crypto_name + URL_Slash
+URL_Slash ='/'
+def detailed_dataset_root(crypto_name,time_interval):
+    return IMGFileMainRoot + URL_Slash + crypto_name + URL_Slash +time_interval+URL_Slash
 
 
 class Dataset:
-    def __init__(self, crypto_name, ):
-        self.data_main_root = detailed_dataset_root(crypto_name)
+    def __init__(self, crypto_name, time_interval ):
+        self.data_main_root = detailed_dataset_root(crypto_name,time_interval)
         self.size = None
 
     def call_image_tensor(self,timesteps):

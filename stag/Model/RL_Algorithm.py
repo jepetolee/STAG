@@ -107,3 +107,6 @@ class Dreamer:
             ModelOptimizer.step()
             RewardOptimizer.step()
             ValueOptimizer.step()
+
+    def train_data(self, reward,): # incomplete
+        return

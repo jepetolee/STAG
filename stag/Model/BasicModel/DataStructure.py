@@ -3,10 +3,10 @@ import torch
 
 class RSSMState:
     def __init__(self, mean, standard_deviation, stochastic_state, deterministic_state):
-        self.mean = torch.tensor(mean, dtype=torch.float64)
-        self.standard_deviation = torch.tensor(standard_deviation, dtype=torch.float64)
-        self.stochastic_state = torch.tensor(stochastic_state, dtype=torch.float64)
-        self.deterministic_state = torch.tensor(deterministic_state, dtype=torch.float64)
+        self.mean = mean.clone().detach()
+        self.standard_deviation = standard_deviation.clone().detach()
+        self.stochastic_state = stochastic_state.clone().detach()
+        self.deterministic_state = deterministic_state.clone().detach()
 
     def get_feature(self):
         return torch.cat((self.stochastic_state, self.deterministic_state), dim=-1)

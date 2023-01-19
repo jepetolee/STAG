@@ -4,22 +4,25 @@ from torch.nn import functional as F
 import numpy as np
 
 
-class ObservationEncoder(jit.ScriptModule):
-    def __init__(self):
+class ObservationEncoder(nn.Module):
+    def __init__(self,stride=2,shape=(3,1000,3750)):
         super().__init__()
         self.Conv1 = nn.Conv2d(3, 32, 4, stride=2)
         self.Conv2 = nn.Conv2d(32, 64, 4, stride=2)
         self.Conv3 = nn.Conv2d(64, 128, 4, stride=2)
         self.Conv4 = nn.Conv2d(128, 256, 4, stride=2)
+        self.shape = shape
+        self.depth = 32
+        self.stride = stride
         self.FCLayer = nn.Identity()
 
-    @jit.script_method
     def forward(self, observation):
         Hidden1 = F.elu(self.Conv1(observation))
         Hidden2 = F.elu(self.Conv2(Hidden1))
-        Hidden3 = F.elu(self.Conv2(Hidden2))
+        Hidden3 = F.elu(self.Conv3(Hidden2))
         Hidden4 = F.elu(self.Conv4(Hidden3))
         Output = self.FCLayer(Hidden4)
+        Output = torch.reshape(Output,(Output.shape[0],-1))
         return Output
 
     @staticmethod
@@ -29,7 +32,6 @@ class ObservationEncoder(jit.ScriptModule):
             ShapeAfterCNN.append(int((x + 2. * padding - (kernel_size - 1.) - 1.) / stride + 1.))
         return tuple(ShapeAfterCNN)
 
-    @property
     def embed_size(self):
         conv1_shape = self.ShapeAfterConv(self.shape[1:], 0, 4, self.stride)
         conv2_shape = self.ShapeAfterConv(conv1_shape, 0, 4, self.stride)
@@ -39,7 +41,7 @@ class ObservationEncoder(jit.ScriptModule):
         return embed_size
 
 
-class ObservationDecoder(jit.ScriptModule):
+class ObservationDecoder(nn.Module):
     __constants__ = ['embedding_size']
 
     def __init__(self, stochastic_size, deterministic_size, embedding_size):
@@ -50,13 +52,15 @@ class ObservationDecoder(jit.ScriptModule):
         self.Conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
         self.Conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
         self.Conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
-        self.modules = [self.FullyConnected, self.conv1, self.conv2, self.conv3, self.conv4]
 
-    @jit.script_method
-    def forward(self, belief, state):
-        AfterFullyConnected = self.FullyConnected(torch.cat([belief, state], dim=1))
-        Flatten = AfterFullyConnected.view(-1, self.embedding_size, 1, 1)
-        AfterConv1 = F.elu(self.Conv1(Flatten))
+    def forward(self, x):
+        batch_shape = x.shape[:-1]
+        embed_size = x.shape[-1]
+        squeezed_size = np.prod(batch_shape).item()
+        x = x.reshape(squeezed_size, embed_size)
+        AfterLinear = F.elu(self.FullyConnected(x))
+        AfterLinear = torch.reshape(AfterLinear,(-1,self.embedding_size,1,1))
+        AfterConv1 = F.elu(self.Conv1(AfterLinear))
         AfterConv2 = F.elu(self.Conv2(AfterConv1))
         AfterConv3 = F.elu(self.Conv3(AfterConv2))
         observation = self.Conv4(AfterConv3)

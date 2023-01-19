@@ -1,36 +1,37 @@
 import torch
 import torch.nn as nn
 
-from BasicModel.Actor import ActorModel
-from BasicModel.DataStructure import RSSMState
-from BasicModel.DenseModel import DenseModel
-from BasicModel.EncoderNDecoder import ObservationDecoder, ObservationEncoder
-from BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
+from stag.Model.BasicModel.Actor import ActorModel
+from stag.Model.BasicModel.DataStructure import RSSMState
+from stag.Model.BasicModel.DenseModel import DenseModel
+from stag.Model.BasicModel.EncoderNDecoder import ObservationDecoder, ObservationEncoder
+from stag.Model.BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
 
 
 class TradingModel(nn.Module):
     def __init__(self, output_size, stochastic_size=30, deterministic_size=200,
                  hidden_size=200, action_hidden_size=200,
-                 action_layers=3, action_dist='one_hot', reward_shape=(1,),
-                 reward_hidden=300, value_shape=(1,), value_hidden=200):
+                 action_layers=3, action_dist='one_hot', reward_shape=1,
+                 reward_hidden=300, value_shape=1, value_hidden=200,device = 'cuda'):
         super().__init__()
-        self.observation_encoder = ObservationEncoder()
-        encoder_embed_size = self.observation_encoder.embed_size()
-        embedding_size = 10000
-        #need to check embedding size
-        self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size)
+        self.observation_encoder = ObservationEncoder().to(device)
 
-        self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size)
+        encoder_embed_size = 3563520
+        embedding_size = 1024
+        #need to check embedding size
+        self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size).to(device)
+
+        self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size).to(device)
         self.representation = RepresentationModel(encoder_embed_size, output_size, stochastic_size,
-                                                  deterministic_size, hidden_size)
+                                                  deterministic_size, hidden_size).to(device)
         self.rollout = RolloutModel(encoder_embed_size, output_size, stochastic_size,
-                                    deterministic_size, hidden_size)
+                                    deterministic_size, hidden_size).to(device)
         feature_size = stochastic_size + deterministic_size
         self.action_size = output_size
         self.action_dist = action_dist
-        self.action_decoder = ActorModel(output_size, feature_size, action_hidden_size, action_layers, action_dist)
-        self.reward_model = DenseModel(feature_size, reward_shape, reward_hidden)
-        self.value_model = DenseModel(feature_size, value_shape, value_hidden)
+        self.action_decoder = ActorModel( feature_size, action_hidden_size, action_layers).to(device)
+        self.reward_model = DenseModel(feature_size, reward_shape, reward_hidden).to(device)
+        self.value_model = DenseModel(feature_size, value_shape, value_hidden).to(device)
         self.stochastic_size = stochastic_size
         self.deterministic_size = deterministic_size
 
@@ -44,7 +45,7 @@ class TradingModel(nn.Module):
 
     def policy(self, state: RSSMState):
         feature = state.get_feature()
-        action_dist = self.action_decoder(feature)
+        action_dist = self.action_decoder(feature,self.action_dist)
         if self.action_dist == 'tanh_normal':
             if self.training:
                 action = action_dist.rsample()

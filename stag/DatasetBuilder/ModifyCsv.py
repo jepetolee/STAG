@@ -11,6 +11,7 @@ from binance.client import Client
 
 def BuildCsv(time_interval, crypto_symbol, URL):
     client = Client(api_key='', api_secret='')
+    print(crypto_symbol,time_interval,START_DATE)
     k_lines = client.futures_historical_klines(symbol=crypto_symbol, interval=time_interval,
                                                start_str=START_DATE, limit=1000)
     dataframe = pd.DataFrame(k_lines)

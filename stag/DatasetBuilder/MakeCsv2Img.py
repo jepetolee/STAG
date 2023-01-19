@@ -1,31 +1,31 @@
 import sys
-from stag.DatasetBuilder.ModifyCsv import *
+from ModifyCsv import *
 from mpl_finance import candlestick2_ohlc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from tqdm import trange
 import cv2 as cv
+from PIL import Image
 
 sys.path.append('..')
 
 LeastNumber2Build = 199  # 0~199
-IMGFileMainRoot = 'C:/Users/Administrator/Documents/GitHub/STAG/stag/DatasetBuilder/ImgDataStorage/'
+IMGFileMainRoot = 'G:/STAG/stag/DatasetBuilder/ImgDataStorage/'
 
 
-def build_single_candlestick_images(crypto_name, url):
+def build_single_candlestick_images(crypto_name, adder, interval, url):
     numpy_data = TakeCsvData(url)
-
     data_size = numpy_data.shape[0]
-    NumbersOfDataset = int(data_size - LeastNumber2Build)
-
+    NumbersOfDataset = int(data_size - LeastNumber2Build - adder)
     for starting_x in trange(NumbersOfDataset):
+        starting_x += adder
         # building files to sequence
         ending_x = LeastNumber2Build + starting_x
         processed_data = numpy_data.iloc[starting_x:ending_x]
         processed_data.reset_index(inplace=True)
         processed_data.index += 1
 
-        image_link = IMGFileMainRoot + crypto_name + '/' + str(starting_x + 1) + 'jpg'  # 이미지 파일 링크 선정
+        image_link = IMGFileMainRoot + crypto_name + '/' + interval + '/' + str(starting_x + 1) + 'jpg.png'  # 이미지 파일 링크 선정
         BuildNSaveImage(processed_data, image_link)
 
 
@@ -95,5 +95,42 @@ def BuildNSaveImage(numpy_data, image_link):
     return
 
 
-def synthesize_image():
+def synthesize_image(symbol, adder):
+    fifteenminute_link = 'G:/STAG/stag/DatasetBuilder/CsvStorage/' + symbol + '/15min_' + symbol + '.csv'
+
+    fifteenminute_data = TakeCsvData(fifteenminute_link)
+    fifteenminute_data_size = int(fifteenminute_data.shape[0] - LeastNumber2Build - adder)
+
+    basic_image_root = 'G:/STAG/stag/DatasetBuilder/ImgDataStorage/' + symbol + '/'
+
+    onehour_starter, fourhour_starter = int(adder/4), int(adder/16)
+    for starting_x in trange(fifteenminute_data_size-3000):
+        starting_x += 1 +adder
+        if starting_x % 4 == 1:
+            onehour_starter += 1
+            if starting_x % 16 == 1:
+                fourhour_starter += 1
+
+        fourhour_root = basic_image_root+'4H/'+str(fourhour_starter)+'jpg.png'
+        fourhour_data = Image.open(fourhour_root)
+
+        onehour_root = basic_image_root+'1H/'+str(onehour_starter+600)+'jpg.png'
+        onehour_data = Image.open(onehour_root)
+
+        fifteenminute_root = basic_image_root+'15M/'+str(starting_x+3000)+'jpg.png'
+        fifteenminute_data = Image.open(fifteenminute_root)
+
+        COMBINED_root =  basic_image_root+'COMBINED/'+str(starting_x)+'.png'
+
+        COMBINED_image = Image.new('RGB',(3*fourhour_data.size[0],fourhour_data.size[1]))
+        COMBINED_image.paste(fourhour_data,(0,0))
+        COMBINED_image.paste(onehour_data,(fourhour_data.size[0],0))
+        COMBINED_image.paste(fifteenminute_data,(2*fourhour_data.size[0],0))
+
+        COMBINED_image.save(COMBINED_root,'PNG')
     return
+
+build_single_candlestick_images('XRPUSDT', 99339, '15M', 'G:/STAG/stag/DatasetBuilder/CsvStorage/XRPUSDT/15min_XRPUSDT.csv')
+#synthesize_image('XRPUSDT', 0)
+# ADAUSDT BTCUSDT ,DOGEUSDT,ETHUSDT,ETCUSDT,XRPUSDT
+

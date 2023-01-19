@@ -1,12 +1,13 @@
+import PIL
 import torch
 from tqdm import trange
-from RL_Model import *
+from stag.Model.RL_Model import *
 
 
 # need to check all tensors tensor
 class Dreamer:
-    def __init__(self, device, train_steps, dtype=torch.float64, learning_rate=0.78):
-        self.trading_model = TradingModel(output_size=3)
+    def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=0.78):
+        self.trading_model = TradingModel(output_size=3).to(device)
         self.train_steps = train_steps
         self.device = device
         self.type = dtype
@@ -28,7 +29,7 @@ class Dreamer:
 
     def GetLoss(self, observations, actions, rewards):
         Model = self.trading_model
-        batch_size = observations[0]
+        batch_size = observations.shape[0]
 
         observations = observations.type(self.type) / 255.0 - 0.5
         embed = Model.observation_encoder(observations)
@@ -39,6 +40,7 @@ class Dreamer:
         feat = post.get_feature()
         image_pred = Model.observation_decoder(feat)
         reward_pred = Model.reward_model(feat)
+        print(reward_pred)
         reward_loss = -torch.mean(reward_pred.log_prob(rewards))
         image_loss = -torch.mean(image_pred.log_prob(observations))
 
@@ -110,3 +112,24 @@ class Dreamer:
 
     def train_data(self, reward,): # incomplete
         return
+if __name__ == '__main__' :
+    import PIL
+    from torchvision import transforms
+
+    Img = PIL.Image.open('G:/STAG/stag/DatasetBuilder/ImgDataStorage/BTCUSDT/COMBINED/1.png')
+    trans = transforms.Compose([transforms.PILToTensor(),
+                                transforms.Resize(size=(1000, 3750))])
+    img = trans(Img).float().to('cuda').reshape(-1,3,1000,3750)
+
+    model = Dreamer('cuda', 10)
+
+    action, action_distribution, value, reward, state = model.RunModel(img)
+
+    model.OptimizeModel(img,action,reward)
+    print(action.shape)
+    print(action_distribution.sample())
+    print(value)
+    print(reward)
+    print(state)
+
+

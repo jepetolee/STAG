@@ -39,7 +39,7 @@ def ChangePosition2Integer(position):
 
 
 class RL_Agent:
-    def __init__(self, leverage, testmode=true):
+    def __init__(self, leverage, testmode= True):
         self.Agent = FutureTrader()
         self.CheckActionChanged = UNSTARTED
         self.RealTrader = self.Agent.Trader
@@ -50,7 +50,7 @@ class RL_Agent:
         self.TradeCounts = 0
         self.WinCounts = 0
 
-        self.CurrentReward = NONE_SCORE
+        self.CurrentReward = 0
         self.PositionPrice = 0
         self.CurrentPrice = 0
         self.CurrentPosition = POSITION_HOLD
@@ -124,7 +124,7 @@ class RL_Agent:
                 reward = conversion_constant*LOSS_CONSTANT
         else:
             reward = conversion_constant
-        return reward, DoesDone
+        return reward#, DoesDone
 
     def check_price_type(self, price):
         if self.CheckActionChanged is POSITION_CHANGED:

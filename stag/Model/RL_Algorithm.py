@@ -2,11 +2,36 @@ import PIL
 import torch
 from tqdm import trange
 from stag.Model.RL_Model import *
+from typing import Iterable
+from torch.nn import Module
+from typing import Iterable
+from torch.nn import Module
+
+import torch as th
+th.autograd.set_detect_anomaly(True)
+def get_parameters(modules: Iterable[Module]):
+    model_parameters = []
+    for module in modules:
+        model_parameters += list(module.parameters())
+    return model_parameters
 
 
+class FreezeParameters:
+    def __init__(self, modules: Iterable[Module]):
+
+        self.modules = modules
+        self.param_states = [p.requires_grad for p in self.modules]
+
+    def __enter__(self):
+        for param in self.modules:
+            param.requires_grad = False
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for i, param in enumerate(self.modules):
+            param.requires_grad = self.param_states[i]
 # need to check all tensors tensor
 class Dreamer:
-    def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=0.78):
+    def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=6e-4):
         self.trading_model = TradingModel(output_size=3).to(device)
         self.train_steps = train_steps
         self.device = device
@@ -28,6 +53,8 @@ class Dreamer:
         return self.trading_model(crypto_chart)
 
     def GetLoss(self, observations, actions, rewards):
+
+
         Model = self.trading_model
         batch_size = observations.shape[0]
 
@@ -40,7 +67,6 @@ class Dreamer:
         feat = post.get_feature()
         image_pred = Model.observation_decoder(feat)
         reward_pred = Model.reward_model(feat)
-        print(reward_pred)
         reward_loss = -torch.mean(reward_pred.log_prob(rewards))
         image_loss = -torch.mean(image_pred.log_prob(observations))
 
@@ -49,14 +75,15 @@ class Dreamer:
         div = torch.mean(torch.distributions.kl.kl_divergence(post_dist, prior_dist))
         div = torch.max(div, div.new_full(div.size(), self.free_nats))
         model_loss = self.kl_scale * div + reward_loss + image_loss
+        with FreezeParameters(self.ModelParameters):
+            image_distribution, _ = Model.rollout.RolloutPolicy(self.horizon, Model.policy, post)
+        imag_feat = image_distribution.get_feature()
+        image_reward = Model.reward_model(imag_feat).mean
+        value = Model.value_model(imag_feat).mean
 
-        image_distribution, _ = Model.rollout.RolloutPolicy(self.horizon, Model.policy, post)
-        imag_feat = image_distribution.get_distribution()
-
-        image_reward = torch.mean(Model.reward_model(imag_feat))
-        value = torch.mean(Model.value_model(imag_feat))
-
+        torch.nan_to_num(value, 0)
         reward = image_reward[:-1]
+
         discount_arr = self.discount * torch.ones_like(image_reward)
         value = value[:-1]
         bootstrap = value[-1]
@@ -65,15 +92,18 @@ class Dreamer:
         target = reward + discount_arr[:-1] * next_values * (1 - self.discount_lambda)
         timesteps = list(range(reward.shape[0] - 1, -1, -1))
         outputs = []
-        accumulated_reward = bootstrap
         for t in timesteps:
             inp = target[t]
             discount_factor = reward[t]
-            accumulated_reward = inp + discount_factor * self.discount_lambda * accumulated_reward
+            accumulated_reward = inp + discount_factor * self.discount_lambda * bootstrap
+
             outputs.append(accumulated_reward)
         returns = torch.flip(torch.stack(outputs), [0])
+
         discount_arr = torch.cat([torch.ones_like(discount_arr[:1]), discount_arr[1:]])
+
         discount = torch.cumprod(discount_arr[:-1], 0)
+
         actor_loss = -torch.mean(discount * returns)
 
         with torch.no_grad():
@@ -83,31 +113,37 @@ class Dreamer:
 
         value_pred = Model.value_model(value_feat)
         log_prob = value_pred.log_prob(value_target)
-        value_loss = -torch.mean(value_discount * log_prob.unsqueeze(2))
+
+        value_loss = -torch.mean(value_discount * log_prob.unsqueeze(1))
+        torch.nan_to_num(value_loss,0)
+        torch.nan_to_num(actor_loss, 0)
+        torch.nan_to_num(model_loss, 0)
 
         return model_loss, actor_loss, value_loss
 
     def OptimizeModel(self, chart_datas, actions, rewards):
         print("optimizing is starting.....")
         # setting optimizers
-
         ModelOptimizer = torch.optim.Adam(self.ModelParameters, lr=self.learning_rate)
-        RewardOptimizer = torch.optim.Adam(self.trading_model.reward_model.parameters(), lr=self.learning_rate)
+        ActionOptimizer = torch.optim.Adam(self.trading_model.action_decoder.parameters(), lr=self.learning_rate)
         ValueOptimizer = torch.optim.Adam(self.trading_model.value_model.parameters(), lr=self.learning_rate)
 
         for i in trange(self.train_steps):
             model_loss, actor_loss, value_loss = self.GetLoss(chart_datas, actions, rewards)
 
+            ModelOptimizer.zero_grad()
+            ActionOptimizer.zero_grad()
+            ValueOptimizer.zero_grad()
             model_loss.backward()
-            actor_loss.backward()
             value_loss.backward()
+            actor_loss.backward()
 
-            torch.nn.utils.clip_grad_norm(self.ModelParameters, self.gradient_clip)
-            torch.nn.utils.clip_grad_norm(self.trading_model.reward_model.parameters(), self.gradient_clip)
-            torch.nn.utils.clip_grad_norm(self.trading_model.value_model.parameters(), self.gradient_clip)
+            torch.nn.utils.clip_grad_norm_(self.ModelParameters, self.gradient_clip)
+            torch.nn.utils.clip_grad_norm_(self.trading_model.action_decoder.parameters(), self.gradient_clip)
+            torch.nn.utils.clip_grad_norm_(self.trading_model.value_model.parameters(), self.gradient_clip)
 
             ModelOptimizer.step()
-            RewardOptimizer.step()
+            ActionOptimizer.step()
             ValueOptimizer.step()
 
     def train_data(self, reward,): # incomplete
@@ -116,16 +152,16 @@ if __name__ == '__main__' :
     import PIL
     from torchvision import transforms
 
-    Img = PIL.Image.open('G:/STAG/stag/DatasetBuilder/ImgDataStorage/BTCUSDT/COMBINED/1.png')
+    Img = PIL.Image.open('G:/BTCUSDT/COMBINED/1.png')
     trans = transforms.Compose([transforms.PILToTensor(),
-                                transforms.Resize(size=(1000, 3750))])
-    img = trans(Img).float().to('cuda').reshape(-1,3,1000,3750)
+                                transforms.Resize(size=(666, 2475))])
+    img = trans(Img).float().to('cuda').reshape(-1,3,666,2475)
 
     model = Dreamer('cuda', 10)
 
     action, action_distribution, value, reward, state = model.RunModel(img)
 
-    model.OptimizeModel(img,action,reward)
+    model.OptimizeModel(img,action,reward.sample())
     print(action.shape)
     print(action_distribution.sample())
     print(value)

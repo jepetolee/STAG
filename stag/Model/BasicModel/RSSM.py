@@ -28,10 +28,10 @@ class TransitionModel(nn.Module):
         )
 
     def initial_state(self, **kwargs):
-        return RSSMState(torch.zeros(1, self.stoch_size, **kwargs).float(),
-                torch.zeros(1, self.stoch_size, **kwargs).float(),
-                torch.zeros(1, self.stoch_size, **kwargs).float(),
-                torch.zeros(1, self.stoch_size, **kwargs).float())
+        return RSSMState(torch.zeros(1, self.stoch_size, **kwargs).float()+1e6,
+                torch.zeros(1, self.stoch_size, **kwargs).float()+1e6,
+                torch.zeros(1, self.stoch_size, **kwargs).float()+1e6,
+                torch.zeros(1, self.stoch_size, **kwargs).float()+1e6)
 
     def forward(self, previous_actions: torch.Tensor, previous_state: RSSMState):
         PreviousOutputForRNN = F.elu(
@@ -39,9 +39,9 @@ class TransitionModel(nn.Module):
 
         DeterministicState = self.GruCell(PreviousOutputForRNN.float(), previous_state.deterministic_state)
         mean, standard_deviation = torch.chunk(self.StochasticPriorModel(DeterministicState), 2, dim=-1)
-        standard_deviation = F.softplus(standard_deviation) + 0.1
-        DistributedResult = Distribution.Normal(mean, standard_deviation)
-        StochasticState = DistributedResult.rsample()
+        standard_deviation = F.softplus(standard_deviation) + 0.1+1e6
+        DistributedResult = Distribution.Normal(mean+1e6, standard_deviation)
+        StochasticState = DistributedResult.rsample()+1e6
         return RSSMState(mean, standard_deviation, StochasticState, DeterministicState)
 
 
@@ -64,10 +64,10 @@ class RepresentationModel(nn.Module):
         )
 
     def initial_state(self, BatchSize, **kwargs):
-        return RSSMState(torch.zeros(BatchSize, self.stoch_size, **kwargs),
-                         torch.zeros(BatchSize, self.stoch_size, **kwargs),
-                         torch.zeros(BatchSize, self.stoch_size, **kwargs),
-                         torch.zeros(BatchSize, self.deter_size, **kwargs))
+        return RSSMState(torch.zeros(BatchSize, self.stoch_size, **kwargs)+1e6,
+                         torch.zeros(BatchSize, self.stoch_size, **kwargs)+1e6,
+                         torch.zeros(BatchSize, self.stoch_size, **kwargs)+1e6,
+                         torch.zeros(BatchSize, self.deter_size, **kwargs)+1e6)
 
     def forward(self, observation_embed: torch.Tensor, PreviousAction: torch.Tensor, previous_state: RSSMState):
         prior_state = self.Transition(PreviousAction, previous_state)
@@ -76,7 +76,6 @@ class RepresentationModel(nn.Module):
         std = F.softplus(std) + 0.1
         dist = Distribution.Normal(mean, std)
         stochastic_state = dist.rsample()
-
         posterior_state = RSSMState(mean, std, stochastic_state, prior_state.deterministic_state)
         return prior_state, posterior_state
 
@@ -116,7 +115,8 @@ class RolloutModel(nn.Module):
         actions = []
         for t in range(steps):
             action, _ = policy(previous_state)
-            state = self.TransitionModel(action, previous_state)
+
+            state = self.Transition(action, previous_state)
             next_states.append(state)
             actions.append(action)
         next_states = stack_states(next_states, dim=0)

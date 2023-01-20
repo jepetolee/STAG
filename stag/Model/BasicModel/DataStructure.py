@@ -1,5 +1,5 @@
 import torch
-
+import torch.distributions as Distribution
 
 class RSSMState:
     def __init__(self, mean, standard_deviation, stochastic_state, deterministic_state):
@@ -12,11 +12,11 @@ class RSSMState:
         return torch.cat((self.stochastic_state, self.deterministic_state), dim=-1)
 
     def get_distribution(self):
-        return torch.cat((self.mean, self.standard_deviation), dim=-1)
+        return Distribution.independent.Independent(Distribution.Normal(self.mean, self.standard_deviation), 1)
 
 
 def stack_states(states: list, dim):
-    return RSSMState(torch.stack([state.mean for state in states], dim=dim),
-                     torch.stack([state.standard_deviation for state in states], dim=dim),
-                     torch.stack([state.stochastic_state for state in states], dim=dim),
-                     torch.stack([state.deterministic_state for state in states], dim=dim),)
+    return RSSMState(torch.stack([state.mean[0] for state in states], dim=dim),
+                     torch.stack([state.standard_deviation[0] for state in states], dim=dim),
+                     torch.stack([state.stochastic_state[0] for state in states], dim=dim),
+                     torch.stack([state.deterministic_state[0] for state in states], dim=dim),)

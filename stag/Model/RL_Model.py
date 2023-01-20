@@ -16,8 +16,8 @@ class TradingModel(nn.Module):
         super().__init__()
         self.observation_encoder = ObservationEncoder().to(device)
 
-        encoder_embed_size = 3563520
-        embedding_size = 1024
+        encoder_embed_size = 1517568
+        embedding_size = 1517568
         #need to check embedding size
         self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size).to(device)
 
@@ -36,6 +36,7 @@ class TradingModel(nn.Module):
         self.deterministic_size = deterministic_size
 
     def forward(self, observation: torch.Tensor, prev_action: torch.Tensor = None, prev_state: RSSMState = None):
+
         state = self.get_state_representation(observation, prev_action, prev_state)
         action, action_distribution = self.policy(state)
 

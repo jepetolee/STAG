@@ -10,7 +10,7 @@ from PIL import Image
 sys.path.append('..')
 
 LeastNumber2Build = 199  # 0~199
-IMGFileMainRoot = 'G:/STAG/stag/DatasetBuilder/ImgDataStorage/'
+IMGFileMainRoot = 'G:/STAG/stag/DatasetBuilder/CsvStorage'
 
 
 def build_single_candlestick_images(crypto_name, adder, interval, url):
@@ -130,7 +130,7 @@ def synthesize_image(symbol, adder):
         COMBINED_image.save(COMBINED_root,'PNG')
     return
 
-build_single_candlestick_images('XRPUSDT', 99339, '15M', 'G:/STAG/stag/DatasetBuilder/CsvStorage/XRPUSDT/15min_XRPUSDT.csv')
+# build_single_candlestick_images('XRPUSDT', 99339, '15M', 'G:/STAG/stag/DatasetBuilder/CsvStorage/XRPUSDT/15min_XRPUSDT.csv')
 #synthesize_image('XRPUSDT', 0)
 # ADAUSDT BTCUSDT ,DOGEUSDT,ETHUSDT,ETCUSDT,XRPUSDT
 

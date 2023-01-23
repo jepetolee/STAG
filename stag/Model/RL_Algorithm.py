@@ -1,20 +1,9 @@
-import PIL
+
 import torch
 from tqdm import trange
 from stag.Model.RL_Model import *
 from typing import Iterable
 from torch.nn import Module
-from typing import Iterable
-from torch.nn import Module
-
-import torch as th
-th.autograd.set_detect_anomaly(True)
-def get_parameters(modules: Iterable[Module]):
-    model_parameters = []
-    for module in modules:
-        model_parameters += list(module.parameters())
-    return model_parameters
-
 
 class FreezeParameters:
     def __init__(self, modules: Iterable[Module]):
@@ -145,27 +134,4 @@ class Dreamer:
             ModelOptimizer.step()
             ActionOptimizer.step()
             ValueOptimizer.step()
-
-    def train_data(self, reward,): # incomplete
-        return
-if __name__ == '__main__' :
-    import PIL
-    from torchvision import transforms
-
-    Img = PIL.Image.open('G:/BTCUSDT/COMBINED/1.png')
-    trans = transforms.Compose([transforms.PILToTensor(),
-                                transforms.Resize(size=(666, 2475))])
-    img = trans(Img).float().to('cuda').reshape(-1,3,666,2475)
-
-    model = Dreamer('cuda', 10)
-
-    action, action_distribution, value, reward, state = model.RunModel(img)
-
-    model.OptimizeModel(img,action,reward.sample())
-    print(action.shape)
-    print(action_distribution.sample())
-    print(value)
-    print(reward)
-    print(state)
-
 

@@ -84,6 +84,7 @@ class RL_Agent:
         self.CurrentPosition = POSITION_HOLD
         if self.CurrentReward > 0:
             self.WinCounts += 1
+        return
 
         # need to count percent and set closing position
 
@@ -94,7 +95,14 @@ class RL_Agent:
 
         return float(calling_size)
 
+    def checking_state(self):
+        if self.PercentState >5:
+            return False
+        else:
+            return
+
     def get_reward(self):
+        revenue = 0
         if self.CurrentPosition is POSITION_LONG:
             revenue = 0.9998*self.CurrentPrice - self.PositionPrice
         elif self.CurrentPosition is POSITION_SHORT:
@@ -103,28 +111,22 @@ class RL_Agent:
             revenue = -0.0025 # least loss that prevent non-decision phenomenon
 
         profit_percent = revenue / self.PositionPrice * 100
+
         conversion_constant = profit_percent / 5
-
-        self.checking_state()
-
-        """
-        <--THE THINGS NEED TO ADD-->
-         
-         1. checking State's bankrupt and adding BANKRUPT_CONSTANT when it bankrupts
-         2. counting self.PercentState
-         3. adding self.WinCounts
-         4. DoesDone points that can stack torch tensors to train
-         """
-
-        if self.CheckActionChanged is POSITION_CHANGED:
+        self.PercentState *= profit_percent
+        DoesDone = self.checking_state()
+        if DoesDone is True:
+            reward  = BANKRUPT_CONSTANT
+        elif self.CheckActionChanged is POSITION_CHANGED:
             self.CheckActionChanged = POSITION_UNCHANGED
+            DoesDone = True
             if conversion_constant >=0:
                 reward = conversion_constant*BENEFIT_CONSTANT
             else:
                 reward = conversion_constant*LOSS_CONSTANT
         else:
             reward = conversion_constant
-        return reward#, DoesDone
+        return reward
 
     def check_price_type(self, price):
         if self.CheckActionChanged is POSITION_CHANGED:

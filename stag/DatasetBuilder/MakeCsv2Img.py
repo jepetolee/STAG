@@ -1,5 +1,5 @@
 import sys
-from ModifyCsv import *
+from stag.DatasetBuilder.ModifyCsv import *
 from mpl_finance import candlestick2_ohlc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec

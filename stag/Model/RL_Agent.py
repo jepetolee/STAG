@@ -1,6 +1,6 @@
 from stag.TradeManager import *
 import numpy as np
-
+import torch
 BANKRUPT_CONSTANT = -100
 BENEFIT_CONSTANT = 1
 LOSS_CONSTANT = -2
@@ -135,6 +135,7 @@ class RL_Agent:
         self.CurrentPrice = price
 
     def check_position(self, action):
+        action = torch.argmax(action)
         if self.CheckActionChanged is UNSTARTED:
             self.CheckActionChanged = POSITION_CHANGED
             self.TradeCounts+=1

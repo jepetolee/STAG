@@ -1,4 +1,4 @@
-from MakeCsv2Img import *
+from stag.DatasetBuilder.MakeCsv2Img import *
 import torch
 from PIL import Image
 import torchvision.transforms as transforms

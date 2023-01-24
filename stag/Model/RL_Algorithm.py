@@ -1,9 +1,9 @@
-
 import torch
 from tqdm import trange
 from stag.Model.RL_Model import *
 from typing import Iterable
 from torch.nn import Module
+
 
 class FreezeParameters:
     def __init__(self, modules: Iterable[Module]):
@@ -18,6 +18,8 @@ class FreezeParameters:
     def __exit__(self, exc_type, exc_val, exc_tb):
         for i, param in enumerate(self.modules):
             param.requires_grad = self.param_states[i]
+
+
 # need to check all tensors tensor
 class Dreamer:
     def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=6e-4):
@@ -42,7 +44,6 @@ class Dreamer:
         return self.trading_model(crypto_chart)
 
     def GetLoss(self, observations, actions, rewards):
-
 
         Model = self.trading_model
         batch_size = observations.shape[0]
@@ -104,20 +105,20 @@ class Dreamer:
         log_prob = value_pred.log_prob(value_target)
 
         value_loss = -torch.mean(value_discount * log_prob.unsqueeze(1))
-        torch.nan_to_num(value_loss,0)
+        torch.nan_to_num(value_loss, 0)
         torch.nan_to_num(actor_loss, 0)
         torch.nan_to_num(model_loss, 0)
 
         return model_loss, actor_loss, value_loss
 
     def OptimizeModel(self, chart_datas, actions, rewards):
-        print("optimizing is starting.....")
+
         # setting optimizers
         ModelOptimizer = torch.optim.Adam(self.ModelParameters, lr=self.learning_rate)
         ActionOptimizer = torch.optim.Adam(self.trading_model.action_decoder.parameters(), lr=self.learning_rate)
         ValueOptimizer = torch.optim.Adam(self.trading_model.value_model.parameters(), lr=self.learning_rate)
 
-        for i in trange(self.train_steps):
+        for i in range(self.train_steps):
             model_loss, actor_loss, value_loss = self.GetLoss(chart_datas, actions, rewards)
 
             ModelOptimizer.zero_grad()
@@ -135,3 +136,24 @@ class Dreamer:
             ActionOptimizer.step()
             ValueOptimizer.step()
 
+    def saving_model(self, url):
+
+        torch.save({
+            'ObservationEncoder': self.trading_model.observation_encoder.state_dict(),
+            'ObservationDecoder': self.trading_model.observation_decoder.state_dict(),
+            'RewardDense': self.trading_model.reward_model.state_dict(),
+            'RepresentationModel': self.trading_model.representation.state_dict(),
+            'TransitionModel': self.trading_model.transition.state_dict(),
+            'ActionModel': self.trading_model.action_decoder.state_dict(),
+            'ValueModel': self.trading_model.value_model.state_dict()
+            }, url)
+
+    def loading_model(self,url):
+        model_parameters = torch.load(url)
+        self.trading_model.observation_encoder.load_state_dict(model_parameters['ObservationEncoder'])
+        self.trading_model.observation_decoder.load_state_dict(model_parameters['ObservationDecoder'])
+        self.trading_model.reward_model.load_state_dict(model_parameters['RewardDense'])
+        self.trading_model.representation.load_state_dict(model_parameters['RepresentationModel'])
+        self.trading_model.transition.load_state_dict(model_parameters['TransitionModel'])
+        self.trading_model.action_decoder.load_state_dict(model_parameters['ActionModel'])
+        self.trading_model.value_model.load_state_dict(model_parameters['ValueModel'])

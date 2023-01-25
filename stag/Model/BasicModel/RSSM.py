@@ -34,6 +34,7 @@ class TransitionModel(nn.Module):
                 torch.zeros(1, self.stoch_size, **kwargs).float()+1e6)
 
     def forward(self, previous_actions: torch.Tensor, previous_state: RSSMState):
+
         PreviousOutputForRNN = F.elu(
             self.RnnInputModel(torch.cat([previous_actions, previous_state.stochastic_state], dim=-1).float()))
 
@@ -92,10 +93,10 @@ class RolloutModel(nn.Module):
         priors = []
         posteriors = []
         for t in range(steps):
-
             prior_state, posterior_state = self.Representation(observation_embed[t].reshape(1,-1), action[t].reshape(1,-1), previous_state)
             priors.append(prior_state)
             posteriors.append(posterior_state)
+            previous_state =  posterior_state
 
         prior = stack_states(priors, dim=0)
         post = stack_states(posteriors, dim=0)

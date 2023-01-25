@@ -22,7 +22,7 @@ class FreezeParameters:
 
 # need to check all tensors tensor
 class Dreamer:
-    def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=6e-4):
+    def __init__(self, device, train_steps, dtype=torch.float32, learning_rate=6e-3):
         self.trading_model = TradingModel(output_size=3).to(device)
         self.train_steps = train_steps
         self.device = device
@@ -51,7 +51,7 @@ class Dreamer:
         observations = observations.type(self.type) / 255.0 - 0.5
         embed = Model.observation_encoder(observations)
 
-        prev_state = Model.representation.initial_state(batch_size, device=self.device, dtype=self.type)
+        prev_state = Model.representation.initial_state(1, device=self.device, dtype=self.type)
         prior, post = Model.rollout.forward(batch_size, embed, actions, prev_state)
 
         feat = post.get_feature()
@@ -120,7 +120,7 @@ class Dreamer:
 
         for i in range(self.train_steps):
             model_loss, actor_loss, value_loss = self.GetLoss(chart_datas, actions, rewards)
-
+        
             ModelOptimizer.zero_grad()
             ActionOptimizer.zero_grad()
             ValueOptimizer.zero_grad()

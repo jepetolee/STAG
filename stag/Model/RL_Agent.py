@@ -1,9 +1,10 @@
 from stag.TradeManager import *
 import numpy as np
 import torch
+
 BANKRUPT_CONSTANT = -100
 BENEFIT_CONSTANT = 1
-LOSS_CONSTANT = -2
+LOSS_CONSTANT = 2
 
 # POSITION_TYPES
 POSITION_LONG = 'BUY'
@@ -39,7 +40,7 @@ def ChangePosition2Integer(position):
 
 
 class RL_Agent:
-    def __init__(self, leverage, testmode= True):
+    def __init__(self, leverage, testmode=True):
         self.Agent = FutureTrader()
         self.CheckActionChanged = UNSTARTED
         self.RealTrader = self.Agent.Trader
@@ -47,12 +48,15 @@ class RL_Agent:
         self.Leverage = leverage
 
         self.PercentState = 100
+        self.UndefinedPercent = 100
         self.TradeCounts = 0
         self.WinCounts = 0
+        self.SavedBenefit = 0
 
         self.CurrentReward = 0
         self.PositionPrice = 0
         self.CurrentPrice = 0
+        self.FirstTicket = True
         self.CurrentPosition = POSITION_HOLD
         self.CurrentCallingSize = 0
         self.CurrentCryptoName = THERES_NO_CRYPTO
@@ -96,49 +100,67 @@ class RL_Agent:
         return float(calling_size)
 
     def checking_state(self):
-        if self.PercentState >5:
+        if self.PercentState > 5:
             return False
         else:
-            return
+            return True
 
     def get_reward(self):
         revenue = 0
         if self.CurrentPosition is POSITION_LONG:
-            revenue = 0.9998*self.CurrentPrice - self.PositionPrice
+            revenue = 0.9998 * self.CurrentPrice - self.PositionPrice
         elif self.CurrentPosition is POSITION_SHORT:
-            revenue = 0.9998*self.PositionPrice - self.CurrentPrice
+            revenue = 0.9998 * self.PositionPrice - self.CurrentPrice
         elif self.CurrentPosition is POSITION_HOLD:
-            revenue = -0.0025 # least loss that prevent non-decision phenomenon
+            revenue = -0.1  # least loss that prevent non-decision phenomenon
 
-        profit_percent = revenue / self.PositionPrice * 100
+        profit_percent = (revenue / self.PositionPrice) * 100
+        conversion_constant = profit_percent * self.Leverage
+        Leveraged_change = (conversion_constant + 100)/100
+        self.UndefinedPercent = self.PercentState * Leveraged_change
 
-        conversion_constant = profit_percent / 5
-        self.PercentState *= profit_percent
+        if self.CurrentPosition is POSITION_HOLD:
+            conversion_constant = -1
+        else:
+            temp = conversion_constant
+            conversion_constant -= self.SavedBenefit
+            self.SavedBenefit = temp
+
         DoesDone = self.checking_state()
         if DoesDone is True:
-            reward  = BANKRUPT_CONSTANT
+            reward = BANKRUPT_CONSTANT
+            self.SavedBenefit = 0
+            self.PercentState = 100
         elif self.CheckActionChanged is POSITION_CHANGED:
-            self.CheckActionChanged = POSITION_UNCHANGED
-            DoesDone = True
-            if conversion_constant >=0:
-                reward = conversion_constant*BENEFIT_CONSTANT
+            print("changed")
+            if self.FirstTicket is True:
+                self.FirstTicket = False
             else:
-                reward = conversion_constant*LOSS_CONSTANT
-        else:
+                self.PercentState *= Leveraged_change
+                self.CheckActionChanged = POSITION_UNCHANGED
+                self.SavedBenefit = 0
             reward = conversion_constant
-        return reward
+        else:
+            if conversion_constant >= 0:
+                reward = conversion_constant * BENEFIT_CONSTANT
+
+            else:
+                reward = conversion_constant * LOSS_CONSTANT
+
+        return reward/10
 
     def check_price_type(self, price):
         if self.CheckActionChanged is POSITION_CHANGED:
             self.PositionPrice = price
-        else: pass
+        else:
+            pass
         self.CurrentPrice = price
 
     def check_position(self, action):
         action = torch.argmax(action)
         if self.CheckActionChanged is UNSTARTED:
             self.CheckActionChanged = POSITION_CHANGED
-            self.TradeCounts+=1
+            self.TradeCounts += 1
             return self.decide_position(action)
         elif ChangePosition2Integer(self.CurrentPosition) == action.item():
             self.CheckActionChanged = POSITION_UNCHANGED

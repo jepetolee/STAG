@@ -2,7 +2,7 @@ from stag.TradeManager import *
 import numpy as np
 import torch
 
-BANKRUPT_CONSTANT = -100
+BANKRUPT_CONSTANT = -1000
 BENEFIT_CONSTANT = 1
 LOSS_CONSTANT = 2
 
@@ -147,7 +147,7 @@ class RL_Agent:
             else:
                 reward = conversion_constant * LOSS_CONSTANT
 
-        return reward/10
+        return reward
 
     def check_price_type(self, price):
         if self.CheckActionChanged is POSITION_CHANGED:

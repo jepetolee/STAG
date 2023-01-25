@@ -33,11 +33,15 @@ class Dreamer:
         self.horizon = 15
         self.discount_lambda = 0.95
         self.learning_rate = learning_rate
+
         self.ModelParameters = list(self.trading_model.observation_encoder.parameters()) + list(
             self.trading_model.observation_decoder.parameters()) \
                                + list(self.trading_model.reward_model.parameters()) + list(
             self.trading_model.representation.parameters()) \
                                + list(self.trading_model.transition.parameters())
+        self.ModelOptimizer = torch.optim.Adam(self.ModelParameters, lr=self.learning_rate)
+        self.ActionOptimizer = torch.optim.Adam(self.trading_model.action_decoder.parameters(), lr=self.learning_rate)
+        self.ValueOptimizer = torch.optim.Adam(self.trading_model.value_model.parameters(), lr=self.learning_rate)
         self.gradient_clip = 100
 
     def RunModel(self, crypto_chart):
@@ -114,16 +118,14 @@ class Dreamer:
     def OptimizeModel(self, chart_datas, actions, rewards):
 
         # setting optimizers
-        ModelOptimizer = torch.optim.Adam(self.ModelParameters, lr=self.learning_rate)
-        ActionOptimizer = torch.optim.Adam(self.trading_model.action_decoder.parameters(), lr=self.learning_rate)
-        ValueOptimizer = torch.optim.Adam(self.trading_model.value_model.parameters(), lr=self.learning_rate)
+
 
         for i in range(self.train_steps):
             model_loss, actor_loss, value_loss = self.GetLoss(chart_datas, actions, rewards)
         
-            ModelOptimizer.zero_grad()
-            ActionOptimizer.zero_grad()
-            ValueOptimizer.zero_grad()
+            self.ModelOptimizer.zero_grad()
+            self.ActionOptimizer.zero_grad()
+            self.ValueOptimizer.zero_grad()
             model_loss.backward()
             value_loss.backward()
             actor_loss.backward()
@@ -132,9 +134,9 @@ class Dreamer:
             torch.nn.utils.clip_grad_norm_(self.trading_model.action_decoder.parameters(), self.gradient_clip)
             torch.nn.utils.clip_grad_norm_(self.trading_model.value_model.parameters(), self.gradient_clip)
 
-            ModelOptimizer.step()
-            ActionOptimizer.step()
-            ValueOptimizer.step()
+            self.ModelOptimizer.step()
+            self.ActionOptimizer.step()
+            self.ValueOptimizer.step()
 
     def saving_model(self, url):
 

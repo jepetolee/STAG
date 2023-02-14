@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 
-from stag.Model.BasicModel.Actor import ActorModel
-from stag.Model.BasicModel.DataStructure import RSSMState
-from stag.Model.BasicModel.DenseModel import DenseModel
-from stag.Model.BasicModel.EncoderNDecoder import ObservationDecoder, ObservationEncoder
-from stag.Model.BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
+from STAG.Model.BasicModel.Actor import ActorModel
+from STAG.Model.BasicModel.DataStructure import RSSMState
+from STAG.Model.BasicModel.DenseModel import DenseModel
+from STAG.Model.BasicModel import ResnetEncoder, ResnetDecoder
+from STAG.Model.BasicModel.RSSM import TransitionModel, RepresentationModel, RolloutModel
 
 
 class TradingModel(nn.Module):
@@ -14,12 +14,12 @@ class TradingModel(nn.Module):
                  action_layers=3, action_dist='one_hot', reward_shape=1,
                  reward_hidden=300, value_shape=1, value_hidden=200,device = 'cuda'):
         super().__init__()
-        self.observation_encoder = ObservationEncoder().to(device)
+        self.observation_encoder = ResnetEncoder().to(device)
 
         encoder_embed_size = 1517568
         embedding_size = 1517568
         #need to check embedding size
-        self.observation_decoder = ObservationDecoder(stochastic_size, deterministic_size, embedding_size).to(device)
+        self.observation_decoder = ResnetDecoder(stochastic_size, deterministic_size, embedding_size).to(device)
 
         self.transition = TransitionModel(output_size, stochastic_size, deterministic_size, hidden_size).to(device)
         self.representation = RepresentationModel(encoder_embed_size, output_size, stochastic_size,

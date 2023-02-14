@@ -4,6 +4,8 @@ from torch.nn import functional as F
 import numpy as np
 import torch.distributions as dist
 from torchvision import transforms
+
+
 class ObservationEncoder(nn.Module):
     def __init__(self,stride=2,shape=(3,1000,3750)):
         super().__init__()
@@ -42,7 +44,6 @@ class ObservationEncoder(nn.Module):
 
 
 class ObservationDecoder(nn.Module):
-    __constants__ = ['embedding_size']
 
     def __init__(self, stochastic_size, deterministic_size, embedding_size):
         super().__init__()

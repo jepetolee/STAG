@@ -1,6 +1,6 @@
 import torch
 from tqdm import trange
-from stag.Model.RL_Model import *
+from STAG.Model.RL_Model import *
 from typing import Iterable
 from torch.nn import Module
 

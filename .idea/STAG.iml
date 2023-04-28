@@ -5,7 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/stag/DatasetBuilder/ImgDataStorage" />
       <excludeFolder url="file://$MODULE_DIR$/stag/DatasetBuilder/CsvStorage" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (base) (2)" jdkType="Python SDK" />
+    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

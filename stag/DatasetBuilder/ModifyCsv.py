@@ -63,3 +63,5 @@ def TakeCsvData(URL):
     except FileNotFoundError:
         print(f"Csv file was not found in {URL}")
         return
+
+#BuildCsv('1d','BTCUSDT','G:/CsvStorage/BTCUSDT/BTCUSDT_1d.csv')

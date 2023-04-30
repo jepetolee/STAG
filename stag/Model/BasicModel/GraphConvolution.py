@@ -6,8 +6,9 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
-import snn
-
+import snntorch as snn
+import snntorch.surrogate as surrogate
+from SNNRESNET import ResNet,Bottleneck
 class WisePooling(Module):
 
     def __init__(self):
@@ -122,40 +123,8 @@ class GraphAttentionPooling(Module):
 class FinalModel(nn.Module):
     def __init__(self):
         super(FinalModel, self).__init__()
-        self.feature_extract = nn.Sequential(
-            nn.Conv2d(3, 5, kernel_size=3),
-            nn.GELU(),
-            nn.BatchNorm2d(5),
-            nn.Conv2d(5, 5, kernel_size=4, stride=2),
-            nn.GELU(),
-            nn.BatchNorm2d(5),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(5, 8, kernel_size=3),
-            nn.GELU(),
-            nn.BatchNorm2d(8),
-            nn.Conv2d(8, 8, kernel_size=4, stride=2),
-            nn.GELU(),
-            nn.BatchNorm2d(8),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(8, 12, kernel_size=3),
-            nn.GELU(),
-            nn.BatchNorm2d(12),
-            nn.Conv2d(12, 12, kernel_size=4, stride=2),
-            nn.GELU(),
-            nn.BatchNorm2d(12),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(12, 16, kernel_size=3),
-            nn.GELU(),
-            nn.BatchNorm2d(16),
-            nn.Conv2d(16, 16, kernel_size=4, stride=2),
-            nn.GELU(),
-            nn.BatchNorm2d(16),
-            nn.Dropout(0.4))
-
-        self.dcgn = DCGN(12544, 13)
+        self.feature_extract = ResNet(Bottleneck, [3, 4, 6,8, 3])
+        self.dcgn = DCGN(1960, 2)
 
     def forward(self, input, device):
         batch_size = input.shape[0]
@@ -187,34 +156,37 @@ class DCGNPropagate(nn.Module):
 
 
 class DCGN(nn.Module):
-    def __init__(self, input, nclass, pooling_size=3):
+    def __init__(self, input, nclass, pooling_size=4):
         super(DCGN, self).__init__()
 
         self.nodewiseconvolution = NodeConvolution(pooling_size, input, pooling_size=pooling_size)
         self.WisePooling = GraphAttentionPooling(input, pooling_size=pooling_size)
-        self.Propagate1 = DCGNPropagate(input, 784)
-
-        self.NodeConvolution2 = NodeConvolution(pooling_size, 784, pooling_size=pooling_size)
-        self.AttentionPooling2 = GraphAttentionPooling(784, pooling_size=pooling_size)
-        self.Propagate2 = DCGNPropagate(784, 28)
-
-        self.classifier = nn.Sequential( nn.Linear(6*28,32),
-                                         nn.GELU(),
+        self.Propagate1 = DCGNPropagate(input, 245)
+        self.Lif1 = snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25))
+        self.NodeConvolution2 = NodeConvolution(pooling_size, 245, pooling_size=pooling_size)
+        self.AttentionPooling2 = GraphAttentionPooling(245, pooling_size=pooling_size)
+        self.Propagate2 = DCGNPropagate(245, 35)
+        self.Lif2 = snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25), init_hidden=True)
+        self.classifier = nn.Sequential( nn.Linear(6*35,32),
+                                         snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25), init_hidden=True),
                                          nn.Linear(32,nclass))
 
+
     def forward(self, x, device):
+        membrane1 = self.Lif1.init_leaky()
+        membrane2 = self.Lif2.init_leaky()
 
         adj = self.WisePooling(x)
         x = self.nodewiseconvolution(x)  # 2,256
         adj = self.get_adjacent(adj).to(device).requires_grad_(True)  # 2,2
         x = self.Propagate1(adj, x)
-        x = F.gelu(x)
+        x = self.Lif1(x,membrane1)
 
         adj = self.AttentionPooling2(x)  # 2,64
         x = self.NodeConvolution2(x)  # 2,64
         adj = self.get_adjacent(adj).to(device).requires_grad_(True)  # 2,32.
         x = self.Propagate2(adj, x)
-        x = F.gelu(x)
+        x = self.Lif2(x,membrane2)
 
         x = x.view(-1, 6*28)
         x = self.classifier(x)

@@ -1,5 +1,5 @@
 import sys
-from ModifyCsv import *
+from .ModifyCsv import *
 from mpl_finance import candlestick2_ohlc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -104,7 +104,7 @@ def synthesize_image(symbol, adder):
     basic_image_root = 'G:/ImgDataStorage/' + symbol + '/'
 
     onehour_starter, fourhour_starter,oneday_starter = adder//4, adder//16,adder//96
-    for starting_x in trange(fifteenminute_data_size-3000):
+    for starting_x in trange(fifteenminute_data_size-19000):
         starting_x += 1 +adder
         if starting_x % 4 == 1:
             onehour_starter += 1
@@ -116,13 +116,13 @@ def synthesize_image(symbol, adder):
         oneday_root = basic_image_root+'1D/'+str(oneday_starter)+'.jpg'
         oneday_data = Image.open(oneday_root)
 
-        fourhour_root = basic_image_root+'4H/'+str(fourhour_starter)+'.jpg'
+        fourhour_root = basic_image_root+'4H/'+str(fourhour_starter+1000)+'.jpg'
         fourhour_data = Image.open(fourhour_root)
 
-        onehour_root = basic_image_root+'1H/'+str(onehour_starter+600)+'.jpg'
+        onehour_root = basic_image_root+'1H/'+str(onehour_starter+4600)+'.jpg'
         onehour_data = Image.open(onehour_root)
 
-        fifteenminute_root = basic_image_root+'15M/'+str(starting_x+3000)+'.jpg'
+        fifteenminute_root = basic_image_root+'15M/'+str(starting_x+19000)+'.jpg'
         fifteenminute_data = Image.open(fifteenminute_root)
 
         COMBINED_root =  basic_image_root+'COMBINED/'+str(starting_x)+'.jpg'
@@ -137,7 +137,7 @@ def synthesize_image(symbol, adder):
         COMBINED_image.save(COMBINED_root,'PNG')
     return
 
-#build_single_candlestick_images('BTCUSDT', , '15M', r'G:/CsvStorage/BTCUSDT/BTCUSDT_15M.csv')
-#synthesize_image('BTCUSDT', 0)
+#build_single_candlestick_images('BTCUSDT', 18900 , '15M', r'G:/CsvStorage/BTCUSDT/BTCUSDT_15M.csv')
+#synthesize_image('BTCUSDT', 420)
 # ADAUSDT BTCUSDT ,DOGEUSDT,ETHUSDT,ETCUSDT,XRPUSDT
 

@@ -6,9 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
-import snntorch as snn
-import snntorch.surrogate as surrogate
-from SNNRESNET import ResNet,Bottleneck
+from .BasicModel.RESNET import ResNet,Bottleneck
 class WisePooling(Module):
 
     def __init__(self):
@@ -120,19 +118,15 @@ class GraphAttentionPooling(Module):
 # v2 1024 512 128 32  4
 # v3 1024 512 256 128 8
 
-class FinalModel(nn.Module):
+class TradingModel(nn.Module):
     def __init__(self):
-        super(FinalModel, self).__init__()
-        self.feature_extract = ResNet(Bottleneck, [3, 4, 6,8, 3])
-        self.dcgn = DCGN(1960, 2)
+        super(TradingModel, self).__init__()
+        self.feature_extract = ResNet(Bottleneck, [3, 4, 6,8])
+        self.dcgn = DCGN(800, 2)
 
     def forward(self, input, device):
-        batch_size = input.shape[0]
-        arrays = list()
-        for i in range(batch_size):
-            arrays.append(self.feature_extract(input[i]))
-        x = torch.stack(arrays, dim=0)
-        x = x.view(batch_size, 50, -1)
+        x = self.feature_extract(input)
+        x = x.view(-1, 96, 800)
         return self.dcgn(x, device)
 
 
@@ -161,34 +155,31 @@ class DCGN(nn.Module):
 
         self.nodewiseconvolution = NodeConvolution(pooling_size, input, pooling_size=pooling_size)
         self.WisePooling = GraphAttentionPooling(input, pooling_size=pooling_size)
-        self.Propagate1 = DCGNPropagate(input, 245)
-        self.Lif1 = snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25))
-        self.NodeConvolution2 = NodeConvolution(pooling_size, 245, pooling_size=pooling_size)
-        self.AttentionPooling2 = GraphAttentionPooling(245, pooling_size=pooling_size)
-        self.Propagate2 = DCGNPropagate(245, 35)
-        self.Lif2 = snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25), init_hidden=True)
-        self.classifier = nn.Sequential( nn.Linear(6*35,32),
-                                         snn.Leaky(beta=0.5, spike_grad=surrogate.fast_sigmoid(slope=25), init_hidden=True),
+        self.Propagate1 = DCGNPropagate(input, 200)
+        self.gelu = nn.GELU()
+        self.NodeConvolution2 = NodeConvolution(pooling_size, 200, pooling_size=pooling_size)
+        self.AttentionPooling2 = GraphAttentionPooling(200 , pooling_size=pooling_size)
+        self.Propagate2 = DCGNPropagate(200, 50)
+        self.classifier = nn.Sequential( nn.Linear(6*50,32),
+                                         nn.GELU(),
                                          nn.Linear(32,nclass))
 
 
     def forward(self, x, device):
-        membrane1 = self.Lif1.init_leaky()
-        membrane2 = self.Lif2.init_leaky()
 
         adj = self.WisePooling(x)
         x = self.nodewiseconvolution(x)  # 2,256
         adj = self.get_adjacent(adj).to(device).requires_grad_(True)  # 2,2
         x = self.Propagate1(adj, x)
-        x = self.Lif1(x,membrane1)
+        x = self.gelu(x)
 
         adj = self.AttentionPooling2(x)  # 2,64
         x = self.NodeConvolution2(x)  # 2,64
         adj = self.get_adjacent(adj).to(device).requires_grad_(True)  # 2,32.
         x = self.Propagate2(adj, x)
-        x = self.Lif2(x,membrane2)
+        x = self.gelu(x)
 
-        x = x.view(-1, 6*28)
+        x = x.view(-1, 6*50)
         x = self.classifier(x)
         return x
 

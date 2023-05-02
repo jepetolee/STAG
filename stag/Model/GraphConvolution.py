@@ -6,7 +6,9 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
-from .BasicModel.RESNET import ResNet,Bottleneck
+from .BasicModel.RESNET import ResNet, Bottleneck
+
+
 class WisePooling(Module):
 
     def __init__(self):
@@ -114,21 +116,23 @@ class GraphAttentionPooling(Module):
             batch_list.append(torch.stack(tensor_list, dim=0))
         return torch.stack(batch_list, dim=0).requires_grad_(True)
 
+
 # v1 1024 256 64 16   4
 # v2 1024 512 128 32  4
 # v3 1024 512 256 128 8
 
-class TradingModel(nn.Module):
+class TradingA2C(nn.Module):
     def __init__(self):
-        super(TradingModel, self).__init__()
-        self.feature_extract = ResNet(Bottleneck, [3, 4, 6,8])
-        self.dcgn = DCGN(800, 2)
+        super(TradingA2C, self).__init__()
+        self.feature_extract = ResNet(Bottleneck, [3, 4, 6, 8])
+        self.dcgn = DCGN(800, 3)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input, device):
         x = self.feature_extract(input)
         x = x.view(-1, 96, 800)
-        return self.dcgn(x, device)
-
+        x = self.dcgn(x, device)
+        return self.softmax(x)
 
 
 class DCGNPropagate(nn.Module):
@@ -158,12 +162,11 @@ class DCGN(nn.Module):
         self.Propagate1 = DCGNPropagate(input, 200)
         self.gelu = nn.GELU()
         self.NodeConvolution2 = NodeConvolution(pooling_size, 200, pooling_size=pooling_size)
-        self.AttentionPooling2 = GraphAttentionPooling(200 , pooling_size=pooling_size)
+        self.AttentionPooling2 = GraphAttentionPooling(200, pooling_size=pooling_size)
         self.Propagate2 = DCGNPropagate(200, 50)
-        self.classifier = nn.Sequential( nn.Linear(6*50,32),
-                                         nn.GELU(),
-                                         nn.Linear(32,nclass))
-
+        self.classifier = nn.Sequential(nn.Linear(6 * 50, 32),
+                                        nn.GELU(),
+                                        nn.Linear(32, nclass))
 
     def forward(self, x, device):
 
@@ -176,10 +179,12 @@ class DCGN(nn.Module):
         adj = self.AttentionPooling2(x)  # 2,64
         x = self.NodeConvolution2(x)  # 2,64
         adj = self.get_adjacent(adj).to(device).requires_grad_(True)  # 2,32.
+
         x = self.Propagate2(adj, x)
+
         x = self.gelu(x)
 
-        x = x.view(-1, 6*50)
+        x = x.view(-1, 6 * 50)
         x = self.classifier(x)
         return x
 
@@ -192,27 +197,31 @@ class DCGN(nn.Module):
 
         Matrix1DotProduct = torch.sqrt(squaresum1)
         Matrix2DotProduct = torch.sqrt(squaresum2)
-        cosine_similarity = torch.div(multiplesum, torch.multiply(Matrix1DotProduct, Matrix2DotProduct))
-        return cosine_similarity
+        return torch.div(multiplesum, torch.multiply(Matrix1DotProduct, Matrix2DotProduct))
 
     def get_adjacent(self, matrix):
         batch_list = list()
         for i in range(matrix.shape[0]):
-            tensor = matrix[i]
+            tensor = matrix[i].detach()
             matrix_frame = tensor.shape[0]  # 4,2,1024
             AdjacentMatrix = torch.zeros(matrix_frame, matrix_frame)  # 2 X 2
 
             chunks = torch.chunk(tensor, matrix_frame, dim=0)
             for i in range(matrix_frame):
                 for j in range(matrix_frame - i):
-                    AdjacentMatrix[j][i] = self.cosine_similarity_adjacent(chunks[i], chunks[j])
+                    AdjacentMatrix[i][j] = self.cosine_similarity_adjacent(chunks[i], chunks[j]).detach()
                     if not i == j:
-                        AdjacentMatrix[j][i] = AdjacentMatrix[i][j]
+                        AdjacentMatrix[j][i] = AdjacentMatrix[i][j].detach()
+
             I = torch.eye(AdjacentMatrix.shape[0], requires_grad=True)
 
             AdjacentMatrix += I
             AdjacentMatrix = AdjacentMatrix.requires_grad_(True)
             D_hat = torch.sum(AdjacentMatrix, dim=0)
+
+
             D_hat = torch.linalg.inv(torch.sqrt(torch.diag(D_hat)))
+
             batch_list.append(D_hat @ AdjacentMatrix @ D_hat)
+
         return torch.stack(batch_list, dim=0).requires_grad_(True)

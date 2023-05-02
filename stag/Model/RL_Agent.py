@@ -157,7 +157,7 @@ class RL_Agent:
         self.CurrentPrice = price
 
     def check_position(self, action):
-        action = torch.argmax(action)
+      #  action = torch.argmax(action)
         if self.CheckActionChanged is UNSTARTED:
             self.CheckActionChanged = POSITION_CHANGED
             self.TradeCounts += 1

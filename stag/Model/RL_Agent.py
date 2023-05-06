@@ -31,7 +31,7 @@ def ChangePosition2Integer(position):
         return 2
     else:
         print("It has error to decide Position")
-
+TAU = 0.98
 
 class RL_Agent:
     def __init__(self, leverage, testmode=True):
@@ -44,6 +44,7 @@ class RL_Agent:
         self.UndefinedPercent = 100
         self.TradeCounts = 0
         self.CheckActionSelectMode = True
+        self.BestProfit =0
 
         self.ChoicingTensor =  torch.zeros(1,3)
 
@@ -97,6 +98,7 @@ class RL_Agent:
             self.CheckActionSelectMode = True
             self.PercentState = 100
             self.ChoicingTensor = torch.zeros(1, 3)
+            self.BestProfit = 0
             return True
 
     def get_reward(self):
@@ -111,30 +113,46 @@ class RL_Agent:
 
         profit_percent = (revenue / self.PositionPrice) * 100
         conversion_constant = profit_percent * self.Leverage
+
+
         Leveraged_change = (conversion_constant + 100)/100
 
-        self.UndefinedPercent = 100 * Leveraged_change
+        self.UndefinedPercent = self.PercentState * Leveraged_change
 
         if self.CurrentPosition is POSITION_HOLD:
             conversion_constant = 0
             self.HoldingCount +=1
+            self.UndefinedPercent = self.PercentState * (1-self.HoldingCount/1000)
 
         DoesDone = self.checking_bankrupt()
 
         if DoesDone is True:
             reward = BANKRUPT_CONSTANT
             print("BANKRUPTED")
+            self.ValueSummation(conversion_constant)
         elif self.CheckActionSelectMode:
             self.HoldingCount=0
+            self.BestProfit =0
             self.ChoicingTensor = torch.zeros(1, 3)
             self.PercentState *= Leveraged_change
             reward = conversion_constant
+            self.ValueSummation(reward)
         else:
             if conversion_constant ==0:
                 reward = -self.HoldingCount/13
             else:
-                reward = conversion_constant/10
+                if conversion_constant > self.BestProfit:
+                    self.BestProfit = conversion_constant
+                    reward = (conversion_constant) / 10
+                else:
+                    reward = (conversion_constant - self.BestProfit * TAU) / 10
 
+                self.ValueSummation(conversion_constant)
+        return reward
+
+    def check_price_type(self, price):
+        self.CurrentPrice = price
+    def ValueSummation(self,reward):
         if reward >=0:
             self.ChoicingTensor[0][self.CurrentPosition]+=reward
             self.ChoicingTensor[0][0]=0
@@ -142,24 +160,15 @@ class RL_Agent:
             self.ChoicingTensor -= reward
             self.ChoicingTensor[0][self.CurrentPosition] += reward
             self.ChoicingTensor[0][0] = 0
-
-        return reward
-
-    def check_price_type(self, price):
-        if self.CheckActionSelectMode:
-            self.PositionPrice = price
-            self.CheckActionSelectMode =False
-        else:
-            pass
-        self.CurrentPrice = price
-
+        return
     def check_keeping(self,action):
         if action.item() == 0:
-            self.CheckActionSelectMode = False
-        elif action.item() == 1:
             self.CheckActionSelectMode = True
+        elif action.item() == 1:
+            self.CheckActionSelectMode = False
 
     def check_position(self, action):
+        self.CheckActionSelectMode = False
         self.TradeCounts += 1
         if action.item() == 0:
             self.CurrentPosition = POSITION_HOLD

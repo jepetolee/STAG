@@ -21,6 +21,9 @@ ETH_DECIMAL_POINT = 1
 
 THERES_NO_CRYPTO = 'NONE'
 
+CheckActionSelectModeTrue = "TRUE"
+CheckActionSelectModeUNTRAINED = "UNTRAINED"
+CheckActionSelectModeFalse= "False"
 
 def ChangePosition2Integer(position):
     if position is POSITION_HOLD:
@@ -43,7 +46,7 @@ class RL_Agent:
         self.PercentState = 100
         self.UndefinedPercent = 100
         self.TradeCounts = 0
-        self.CheckActionSelectMode = True
+        self.CheckActionSelectMode = CheckActionSelectModeTrue
         self.BestProfit =0
 
         self.ChoicingTensor =  torch.zeros(1,3)
@@ -95,7 +98,10 @@ class RL_Agent:
         if self.UndefinedPercent > 5:
             return False
         else:
-            self.CheckActionSelectMode = True
+            if self.IsTestMode:
+                self.CheckActionSelectMode = CheckActionSelectModeUNTRAINED
+            else:
+                self.CheckActionSelectMode = CheckActionSelectModeTrue
             self.PercentState = 100
             self.ChoicingTensor = torch.zeros(1, 3)
             self.BestProfit = 0
@@ -130,7 +136,7 @@ class RL_Agent:
             reward = BANKRUPT_CONSTANT
             print("BANKRUPTED")
             self.ValueSummation(conversion_constant)
-        elif self.CheckActionSelectMode:
+        elif self.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
             self.HoldingCount=0
             self.BestProfit =0
             self.ChoicingTensor = torch.zeros(1, 3)
@@ -153,7 +159,9 @@ class RL_Agent:
     def check_price_type(self, price):
         self.CurrentPrice = price
     def ValueSummation(self,reward):
-        if reward >=0:
+        if self.CurrentPosition is POSITION_HOLD:
+            self.ChoicingTensor[0][0] = -self.HoldingCount/15
+        elif reward >=0:
             self.ChoicingTensor[0][self.CurrentPosition]+=reward
             self.ChoicingTensor[0][0]=0
         else:
@@ -163,12 +171,17 @@ class RL_Agent:
         return
     def check_keeping(self,action):
         if action.item() == 0:
-            self.CheckActionSelectMode = True
+            if self.IsTestMode:
+                self.CheckActionSelectMode = CheckActionSelectModeUNTRAINED
+            else:
+                self.CheckActionSelectMode = CheckActionSelectModeTrue
         elif action.item() == 1:
-            self.CheckActionSelectMode = False
+            self.CheckActionSelectMode = CheckActionSelectModeFalse
+
 
     def check_position(self, action):
-        self.CheckActionSelectMode = False
+
+        self.CheckActionSelectMode = CheckActionSelectModeFalse
         self.TradeCounts += 1
         if action.item() == 0:
             self.CurrentPosition = POSITION_HOLD

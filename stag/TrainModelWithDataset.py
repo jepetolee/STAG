@@ -26,7 +26,7 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
     feature_list =list()
     count=0
     prekeepRemains = False
-    PositionOptimizer  =  torch.optim.AdamW(list(model.feature_extract.parameters())+list(model.PiNet.parameters()), lr=1e-3, betas=(0.9, 0.999))
+    PositionOptimizer  =  torch.optim.AdamW(list(model.feature_extract.parameters())+list(model.PiNet.parameters()), lr=5e-4, betas=(0.9, 0.999))
     KeepingOptimizer = torch.optim.AdamW(list(model.ValueNet.parameters())+list(model.DecidingNet.parameters()), lr=1e-3, betas=(0.9, 0.999))
     for number in range(len(testing_number_data) - adder - 19199):
 
@@ -42,15 +42,15 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
             video = torch.stack(feature_list,dim=0).to(device).reshape(-1,50,3,1000,800).permute(0,2,1,3,4)
             close_price_in_csv_data = testing_number_data['ClosePrice'][19199 + decided_number]
             feature_list.pop(0)
-            if virtual_trader.CheckActionSelectMode:
+            if virtual_trader.CheckActionSelectMode == CheckActionSelectModeTrue:
                 action = model.Pi(video)
                 act = torch.argmax(action, dim=1).reshape(-1, 1)
                 virtual_trader.PositionPrice =close_price_in_csv_data
                 virtual_trader.check_position(act)
                 delaycount =count+2
-            elif count>=delaycount and virtual_trader.CheckActionSelectMode is False:
+            elif count>=delaycount and virtual_trader.CheckActionSelectMode == CheckActionSelectModeFalse:
                 prekeepRemains = True
-                CheckingState = count //60
+                CheckingState = count //300
                 eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * CheckingState / EPS_DECAY)
                 keeping = model.Deciding(video)
                 if random.random() > eps_threshold:
@@ -70,18 +70,19 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
             virtual_trader.check_price_type(close_price_in_csv_data)
 
             if count >= 53:
-                if virtual_trader.CheckActionSelectMode:
-                    dist = F.softmax(virtual_trader.ChoicingTensor, dim=1).to(device)
-                    Dist = Categorical(dist).sample()
-                    PositionLoss = criterion(action, Dist)
-                    PositionOptimizer.zero_grad()
-                    PositionLoss.backward(retain_graph=True)
-                    PositionOptimizer.step()
+                if virtual_trader.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
+                        virtual_trader.CheckActionSelectMode = CheckActionSelectModeTrue
+                        dist = F.softmax(virtual_trader.ChoicingTensor, dim=1).to(device)
+                        Dist = Categorical(dist).sample()
+                        PositionLoss = criterion(action, Dist)
+                        PositionOptimizer.zero_grad()
+                        PositionLoss.backward(retain_graph=True)
+                        PositionOptimizer.step()
                 else:
-                     for i in range(3):
-                        GammaValue = model.Value(pre_video,action)
+                     for i in range(4):
+                        GammaValue = model.Value(pre_video)
                         TargetVector = reward + gamma * GammaValue
-                        SettingsValue = model.Value(video,action)
+                        SettingsValue = model.Value(video)
                         Adventage = (TargetVector - SettingsValue).detach() * tau
                         DecingValue = model.Deciding(video)
                         DecingDist = Categorical(DecingValue)

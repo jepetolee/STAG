@@ -1,3 +1,3 @@
-from stag.Model.RL_Agent import *
-from stag.Model.BasicModel import *
-from stag.Model.TradingModel import *
+from .RL_Agent import *
+from .BasicModel import *
+from .TradingModel import *

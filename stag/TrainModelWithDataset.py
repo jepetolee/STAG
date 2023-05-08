@@ -16,9 +16,8 @@ EPS_DECAY = 200  # 학습 진행시 에이전트가 무작위로 행동할 확�
 
 def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
     model = TradingA2C().to(device)
-    criterion = nn.CrossEntropyLoss()
-
-    trans = transforms.Compose([transforms.ToTensor()])
+    trans = transforms.Compose([transforms.ToTensor(),
+                                transforms.Grayscale()])
     if load_model is True:
         model.load_state_dict(torch.load('./models.pt'))
     testing_number_data = TakeCsvData('G:/CsvStorage/' + crypto_name + '/BTCUSDT_15M.csv')
@@ -26,38 +25,38 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
     feature_list =list()
     count=0
     prekeepRemains = False
-    PositionOptimizer  =  torch.optim.AdamW(list(model.feature_extract.parameters())+list(model.PiNet.parameters()), lr=5e-4, betas=(0.9, 0.999))
+    PositionOptimizer  =  torch.optim.AdamW(list(model.feature_extract.parameters())+list(model.PiNet.parameters()), lr=4e-3, betas=(0.9, 0.999))
     KeepingOptimizer = torch.optim.AdamW(list(model.ValueNet.parameters())+list(model.DecidingNet.parameters()), lr=1e-3, betas=(0.9, 0.999))
     for number in range(len(testing_number_data) - adder - 19199):
 
         decided_number = number + adder
         url = 'G:/ImgDataStorage/' + crypto_name + '/COMBINED/' + str(decided_number + 1) + '.jpg'
         crypto_chart = PIL.Image.open(url)
-        crypto_chart =  crypto_chart.resize((1000,800))
         crypto_chart = trans(crypto_chart).float().to(device)
         feature_list.append(crypto_chart)
         count+=1
 
         if count >= 50:
-            video = torch.stack(feature_list,dim=0).to(device).reshape(-1,50,3,1000,800).permute(0,2,1,3,4)
+            video = torch.stack(feature_list,dim=0).to(device).reshape(-1,50,3000,2400)
             close_price_in_csv_data = testing_number_data['ClosePrice'][19199 + decided_number]
             feature_list.pop(0)
             if virtual_trader.CheckActionSelectMode == CheckActionSelectModeTrue:
                 action = model.Pi(video)
+                PositionVideo = video.cpu()
                 act = torch.argmax(action, dim=1).reshape(-1, 1)
                 virtual_trader.PositionPrice =close_price_in_csv_data
                 virtual_trader.check_position(act)
-                delaycount =count+2
-            elif count>=delaycount and virtual_trader.CheckActionSelectMode == CheckActionSelectModeFalse:
+                delay_count = count+2
+            elif count>delay_count and virtual_trader.CheckActionSelectMode == CheckActionSelectModeFalse:
                 prekeepRemains = True
-                CheckingState = count //300
+                CheckingState = (count-adder) //350
                 eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * CheckingState / EPS_DECAY)
-                keeping = model.Deciding(video)
+                keeping = model.Deciding(video,action)
                 if random.random() > eps_threshold:
                     CheckKeep = torch.argmax(keeping, dim=1).reshape(-1, 1)
                 else:
                     choice =random.randint(1,100)
-                    if choice >74:
+                    if choice >91:
                         keeping_value = 0
                     else:
                         keeping_value = 1
@@ -69,22 +68,25 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
             virtual_trader.checking_bankrupt()
             virtual_trader.check_price_type(close_price_in_csv_data)
 
-            if count >= 53:
+            if count > delay_count+1:
+                reward = virtual_trader.get_reward()
+                reward = torch.tensor(reward, dtype=torch.float32, device=device).reshape(-1, 1)
                 if virtual_trader.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
+                        action = model.Pi(PositionVideo.to(device))
                         virtual_trader.CheckActionSelectMode = CheckActionSelectModeTrue
                         dist = F.softmax(virtual_trader.ChoicingTensor, dim=1).to(device)
-                        Dist = Categorical(dist).sample()
-                        PositionLoss = criterion(action, Dist)
+                        PositionLoss = F.mse_loss(action,dist)
                         PositionOptimizer.zero_grad()
                         PositionLoss.backward(retain_graph=True)
                         PositionOptimizer.step()
+                        del PositionVideo
                 else:
                      for i in range(4):
-                        GammaValue = model.Value(pre_video)
+                        GammaValue = model.Value(pre_video,action)
                         TargetVector = reward + gamma * GammaValue
-                        SettingsValue = model.Value(video)
+                        SettingsValue = model.Value(video,action)
                         Adventage = (TargetVector - SettingsValue).detach() * tau
-                        DecingValue = model.Deciding(video)
+                        DecingValue = model.Deciding(video,action)
                         DecingDist = Categorical(DecingValue)
 
                         KeepingProbability = Categorical(pre_keeping.view(-1))
@@ -97,6 +99,8 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
                         KeepingOptimizer.zero_grad()
                         loss.backward(retain_graph=True)
                         KeepingOptimizer.step()
+
+                     del pre_video
 
                 if virtual_trader.CurrentPosition ==0:
                     position = "NONE"
@@ -113,8 +117,6 @@ def TrainWithDataset(crypto_name, load_model=False, adder=0, device='cuda'):
                             " Postion Price: "+ str(virtual_trader.PositionPrice),
                             "Now Price: " +   str(close_price_in_csv_data))
 
-            reward = virtual_trader.get_reward()
-            reward = torch.tensor(reward,dtype=torch.float32,device=device).reshape(-1,1)
             pre_video = video.detach()
             if prekeepRemains:
                 pre_keeping = keeping.detach()

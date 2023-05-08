@@ -160,7 +160,7 @@ class RL_Agent:
         self.CurrentPrice = price
     def ValueSummation(self,reward):
         if self.CurrentPosition is POSITION_HOLD:
-            self.ChoicingTensor[0][0] = -self.HoldingCount/15
+            self.ChoicingTensor[0][0] = 0
         elif reward >=0:
             self.ChoicingTensor[0][self.CurrentPosition]+=reward
             self.ChoicingTensor[0][0]=0

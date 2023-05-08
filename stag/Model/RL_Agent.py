@@ -48,8 +48,8 @@ class RL_Agent:
         self.TradeCounts = 0
         self.CheckActionSelectMode = CheckActionSelectModeTrue
         self.BestProfit =0
-
-        self.ChoicingTensor =  torch.zeros(1,3)
+        self.PGAE =0
+        self.ChoicingTensor =  torch.zeros(1,1)
 
         self.PositionPrice = 0
         self.CurrentPrice = 0
@@ -103,8 +103,9 @@ class RL_Agent:
             else:
                 self.CheckActionSelectMode = CheckActionSelectModeTrue
             self.PercentState = 100
-            self.ChoicingTensor = torch.zeros(1, 3)
+            self.ChoicingTensor = torch.zeros(1, 1)
             self.BestProfit = 0
+            self.PGAE = 0
             return True
 
     def get_reward(self):
@@ -139,13 +140,14 @@ class RL_Agent:
         elif self.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
             self.HoldingCount=0
             self.BestProfit =0
-            self.ChoicingTensor = torch.zeros(1, 3)
+            self.ChoicingTensor = torch.zeros(1, 1)
             self.PercentState *= Leveraged_change
             reward = conversion_constant
             self.ValueSummation(reward)
         else:
-            if conversion_constant ==0:
+            if self.CurrentPosition is POSITION_HOLD:
                 reward = -self.HoldingCount/13
+                self.ValueSummation(reward)
             else:
                 if conversion_constant > self.BestProfit:
                     self.BestProfit = conversion_constant
@@ -159,15 +161,7 @@ class RL_Agent:
     def check_price_type(self, price):
         self.CurrentPrice = price
     def ValueSummation(self,reward):
-        if self.CurrentPosition is POSITION_HOLD:
-            self.ChoicingTensor[0][0] = 0
-        elif reward >=0:
-            self.ChoicingTensor[0][self.CurrentPosition]+=reward
-            self.ChoicingTensor[0][0]=0
-        else:
-            self.ChoicingTensor -= reward
-            self.ChoicingTensor[0][self.CurrentPosition] += reward
-            self.ChoicingTensor[0][0] = 0
+        self.ChoicingTensor +=reward
         return
     def check_keeping(self,action):
         if action.item() == 0:

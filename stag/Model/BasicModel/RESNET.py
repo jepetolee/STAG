@@ -57,20 +57,20 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(50, self.inplanes, kernel_size=5, stride=3, padding=3,
+        self.conv1 = nn.Conv2d(40, self.inplanes, kernel_size=5, stride=3, padding=3,
                                bias=False)
         self.conv2 = nn.Conv2d(self.inplanes, self.inplanes, kernel_size=5, stride=3, padding=3,
                                bias=False)
         self.gelu = nn.GELU()
 
         self.layer1 = self._make_layer(block, 2, layers[0])
-        self.layer2 = self._make_layer(block, 4, layers[1], stride=3,
+        self.layer2 = self._make_layer(block, 3, layers[1], stride=3,
                                        dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(block, 6, layers[2], stride=3,
+        self.layer3 = self._make_layer(block, 4, layers[2], stride=3,
                                        dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 8, layers[3], stride=3,
+        self.layer4 = self._make_layer(block, 5, layers[3], stride=3,
                                        dilate=replace_stride_with_dilation[1])
-        self.layer5 = self._make_layer(block, 10, layers[4], stride=3,
+        self.layer5 = self._make_layer(block, 6, layers[4], stride=3,
                                        dilate=replace_stride_with_dilation[1])
 
         for m in self.modules():

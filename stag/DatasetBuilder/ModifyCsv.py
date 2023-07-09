@@ -64,4 +64,4 @@ def TakeCsvData(URL):
         print(f"Csv file was not found in {URL}")
         return
 
-#BuildCsv('1d','BTCUSDT','G:/CsvStorage/BTCUSDT/BTCUSDT_1d.csv')
+#UpdateCsv('1d','BTCUSDT','G:/CsvStorage/BTCUSDT/BTCUSDT_1D.csv',)

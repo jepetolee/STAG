@@ -9,12 +9,6 @@ POSITION_HOLD = 0
 POSITION_LONG = 1
 POSITION_SHORT = 2
 
-
-# LEVERAGE_TYPES
-LEVERAGE_HIGH = 5
-LEVERAGE_DEFAULT = 3
-LEVERAGE_LOW = 1
-
 # CRYPTOTYPES
 BTC_DECIMAL_POINT = 1000
 ETH_DECIMAL_POINT = 1
@@ -23,7 +17,8 @@ THERES_NO_CRYPTO = 'NONE'
 
 CheckActionSelectModeTrue = "TRUE"
 CheckActionSelectModeUNTRAINED = "UNTRAINED"
-CheckActionSelectModeFalse= "False"
+CheckActionSelectModeFalse = "False"
+
 
 def ChangePosition2Integer(position):
     if position is POSITION_HOLD:
@@ -34,28 +29,29 @@ def ChangePosition2Integer(position):
         return 2
     else:
         print("It has error to decide Position")
-TAU = 0.98
 
 class RL_Agent:
-    def __init__(self, leverage, testmode=True):
+    def __init__(self, leverage, testmode=True, limitymode=False, limit=-30):
         self.Agent = FutureTrader()
         self.RealTrader = self.Agent.Trader
         self.IsTestMode = testmode
         self.Leverage = leverage
-        self.HoldingCount =0
+        self.HoldingCount = 0
         self.PercentState = 100
         self.UndefinedPercent = 100
         self.TradeCounts = 0
         self.CheckActionSelectMode = CheckActionSelectModeTrue
-        self.BestProfit =0
-        self.PGAE =0
-        self.ChoicingTensor =  torch.zeros(1,1)
-
+        self.ChoicingTensor = torch.zeros(1, 1)
         self.PositionPrice = 0
         self.CurrentPrice = 0
         self.CurrentPosition = POSITION_HOLD
         self.CurrentCallingSize = 0
         self.CurrentCryptoName = THERES_NO_CRYPTO
+        if limitymode:
+            self.limity_mode = True
+            self.limit = limit
+        else:
+            self.limity_mode = False
 
     def Trade(self, crypto_name, crypto_decimal_points):
         self.CurrentCryptoName = crypto_name
@@ -99,13 +95,11 @@ class RL_Agent:
             return False
         else:
             if self.IsTestMode:
+
                 self.CheckActionSelectMode = CheckActionSelectModeUNTRAINED
             else:
                 self.CheckActionSelectMode = CheckActionSelectModeTrue
             self.PercentState = 100
-            self.ChoicingTensor = torch.zeros(1, 1)
-            self.BestProfit = 0
-            self.PGAE = 0
             return True
 
     def get_reward(self):
@@ -115,55 +109,45 @@ class RL_Agent:
         elif self.CurrentPosition is POSITION_SHORT:
             revenue = 0.9998 * self.PositionPrice - self.CurrentPrice
         elif self.CurrentPosition is POSITION_HOLD:
-            revenue = -0.1  # least loss that prevent non-decision phenomenon
-
+            revenue = 0  # least loss that prevent non-decision phenomenon
 
         profit_percent = (revenue / self.PositionPrice) * 100
         conversion_constant = profit_percent * self.Leverage
 
-
-        Leveraged_change = (conversion_constant + 100)/100
-
+        Leveraged_change = (conversion_constant + 100) / 100
         self.UndefinedPercent = self.PercentState * Leveraged_change
-
-        if self.CurrentPosition is POSITION_HOLD:
-            conversion_constant = 0
-            self.HoldingCount +=1
-            self.UndefinedPercent = self.PercentState * (1-self.HoldingCount/1000)
 
         DoesDone = self.checking_bankrupt()
 
-        if DoesDone is True:
-            reward = BANKRUPT_CONSTANT
-            print("BANKRUPTED")
-            self.ValueSummation(conversion_constant)
-        elif self.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
-            self.HoldingCount=0
-            self.BestProfit =0
-            self.ChoicingTensor = torch.zeros(1, 1)
+        if self.limity_mode is True and conversion_constant < self.limit:
             self.PercentState *= Leveraged_change
-            reward = conversion_constant
-            self.ValueSummation(reward)
+            reward = conversion_constant / 100
+            self.CheckActionSelectMode = CheckActionSelectModeUNTRAINED
+            self.ValueSave(-0.6)
+
+        elif self.CheckActionSelectMode == CheckActionSelectModeUNTRAINED:
+
+            self.PercentState *= Leveraged_change
+            reward = conversion_constant / 100
+            self.ValueSave(conversion_constant*2)
+
         else:
             if self.CurrentPosition is POSITION_HOLD:
-                reward = -self.HoldingCount/13
-                self.ValueSummation(reward)
+                reward = 0
+                self.ValueSave(reward)
             else:
-                if conversion_constant > self.BestProfit:
-                    self.BestProfit = conversion_constant
-                    reward = (conversion_constant) / 10
-                else:
-                    reward = (conversion_constant - self.BestProfit * TAU) / 10
+                reward =conversion_constant/100
 
-                self.ValueSummation(conversion_constant)
-        return reward
+        return reward, DoesDone
 
     def check_price_type(self, price):
         self.CurrentPrice = price
-    def ValueSummation(self,reward):
-        self.ChoicingTensor +=reward
+
+    def ValueSave(self, reward):
+        self.ChoicingTensor[0] = reward
         return
-    def check_keeping(self,action):
+
+    def check_keeping(self, action):
         if action.item() == 0:
             if self.IsTestMode:
                 self.CheckActionSelectMode = CheckActionSelectModeUNTRAINED
@@ -172,17 +156,19 @@ class RL_Agent:
         elif action.item() == 1:
             self.CheckActionSelectMode = CheckActionSelectModeFalse
 
-
     def check_position(self, action):
 
         self.CheckActionSelectMode = CheckActionSelectModeFalse
         self.TradeCounts += 1
         if action.item() == 0:
             self.CurrentPosition = POSITION_HOLD
+            self.HoldingCount += 1
         elif action.item() == 1:
             self.CurrentPosition = POSITION_LONG
+            self.HoldingCount = 0
         elif action.item() == 2:
             self.CurrentPosition = POSITION_SHORT
+            self.HoldingCount = 0
         else:
             print("there is an error for deciding position")
         return self.CurrentPosition

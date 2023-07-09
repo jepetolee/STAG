@@ -1,10 +1,6 @@
-import snntorch as snn
 import torch.nn as nn
-import torch.nn.functional as F
-import snntorch.surrogate as surrogate
-import PIL
-import torch
-from torchvision import transforms
+
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -21,26 +17,28 @@ class Bottleneck(nn.Module):
         self.conv3 = nn.Conv2d(width, output_channel * self.expansion, kernel_size=1, stride=1, bias=False)
         self.downsample = downsample
         self.stride = stride
+
     def forward(self, inputs):
         identity = inputs
         x = self.conv1(inputs)
-        x= self.gelu(x)
+        x = self.gelu(x)
 
         x = self.conv2(x)
-        x= self.gelu(x)
+        x = self.gelu(x)
 
         x = self.conv3(x)
-        x= self.gelu(x)
+        x = self.gelu(x)
 
         if self.downsample is not None:
             identity = self.downsample(inputs)
         x += identity
-        out =self.gelu(x)
+        out = self.gelu(x)
         return out
+
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers,zero_init_residual=False,
+    def __init__(self, block, layers, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
@@ -57,7 +55,7 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(40, self.inplanes, kernel_size=5, stride=3, padding=3,
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=5, stride=3, padding=3,
                                bias=False)
         self.conv2 = nn.Conv2d(self.inplanes, self.inplanes, kernel_size=5, stride=3, padding=3,
                                bias=False)
@@ -91,12 +89,11 @@ class ResNet(nn.Module):
             stride = 1
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion, stride=stride, kernel_size=1,bias=False),
+                nn.Conv2d(self.inplanes, planes * block.expansion, stride=stride, kernel_size=1, bias=False),
             )
 
-        layers = []
-        layers.append(block(self.inplanes, planes, stride=stride,downsample= downsample, groups= self.groups,
-                            base_width=self.base_width, dilation=previous_dilation))
+        layers = [block(self.inplanes, planes, stride=stride, downsample=downsample, groups=self.groups,
+                        base_width=self.base_width, dilation=previous_dilation)]
 
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):

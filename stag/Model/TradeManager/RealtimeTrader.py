@@ -7,13 +7,13 @@ PRICE_CHECKING_FAILED = -2
 
 
 def GetApiKey():
-    API = open('G:/STAG/stag/TradeManager/ApiKeyStorage/Api', 'r')
+    API = open('G:/STAG/stag/Model/TradeManager/ApiKeyStorage/Api', 'r')
     ApiKey, ApiSecret = API.readline().split(',')
     return ApiKey, ApiSecret
 
 
 def GetTestApiKey():
-    API = open('./ApiKeyStorage/TestApi', 'r')
+    API = open('G:/STAG/stag/Model/TradeManager/ApiKeyStorage/TestApi', 'r')
     ApiKey, ApiSecret = API.readline().split(',')
     return ApiKey, ApiSecret
 

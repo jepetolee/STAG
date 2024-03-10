@@ -1,210 +1,175 @@
-import torch.nn as nn
+import flask
+
 from .BasicModel.Moe import MixedActor
-from .BasicModel.DCGN import *
+from .BasicModel.efficientNet import get_efficientnet_v2
+#from .BasicModel.DCGN import *
+import torch
+import torch.nn as nn
+from torch import Tensor
+from einops import rearrange, repeat
+from einops.layers.torch import Rearrange, Reduce
+import gc
+from torch.nn.utils import weight_norm
+import torch.nn.functional as F
+import math
+from .BasicModel.MoeLSTM import ResLSTMLayer
+from .BasicModel.Conformer.encoder import ConformerEncoder
 import torch
 
 
+class GatingNetwork(nn.Module):
+    def __init__(self, input_size, num_experts,feature=1024):
+        super(GatingNetwork, self).__init__()
+        self.fc1 = nn.Linear(input_size, feature)
+        self.fc2 = nn.Linear(feature, num_experts)
+
+    def forward(self, x):
+        x = F.gelu(self.fc1(x))
+        x = F.softmax(self.fc2(x), dim=1)
+        return x
 
 
-class TradingA2C(nn.Module):
-    def __init__(self,intersize = 8800):
-        super(TradingA2C, self).__init__()
-        self.intersize = intersize
-        self.feature_extract = nn.Sequential(nn.Flatten(),
-                                             nn.Linear(8800,2200),
-                                             nn.GELU(),
-                                             nn.Linear(2200,550),
-                                             nn.GELU())
+class ExpertNetwork(nn.Module):
+    def __init__(self, input_size, output_size,feature=1024):
+        super(ExpertNetwork, self).__init__()
+        self.fc1 = nn.Linear(input_size, feature)
+        self.fc2 = nn.Linear(feature, output_size)
 
-        self.PiNet = VideoClassifier(intersize,3)
-        self.DecidingNet = VideoClassifier(intersize,2)
-        self.ValueNet = VideoClassifier(intersize,1)
-        self.ValuePNet = VideoClassifier(intersize, 1)
-        self.softmax = nn.Softmax(dim=1)
-
-        self.in_size = 550
-        self.h1 = 110
-        self.c_t1_position = None
-        self.h_t1_position = None
-        self.c_t1_decide = None
-        self.h_t1_decide = None
-        self.lstmPi = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
-        self.lstmPiValue = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
-        self.lstmDecide = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
-        self.lstmDecideValue = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
-
-    def reset_lstm(self, buf_size=80):
-        with torch.no_grad():
-            self.h_t1_decide =self.c_t1_decide =self.h_t1_position = self.c_t1_position = torch.zeros(buf_size, self.h1, device=self.lstm.weight_ih.device)
-            self.h_t1_decideV = self.c_t1_decideV = self.h_t1_positionV = self.c_t1_positionV = torch.zeros(buf_size,self.h1,device=self.lstm.weight_ih.device)
-
-    def Pi(self, input):
-        x = self.feature_extract(input)
-        h_t1_position, c_t1_position = self.lstmPi(x, (self.h_t1_position, self.c_t1_position))
-        self.h_t1_position, self.c_t1_position= h_t1_position, c_t1_position
-        x = h_t1_position.view(-1, self.intersize)
-        x = self.PiNet(x)
-        return self.softmax(x)
-
-    def ValueP(self, input):
-        x = self.feature_extract(input)
-        h_t1_position, c_t1_position = self.lstmPiValue(x, (self.h_t1_position, self.c_t1_position))
-        self.h_t1_positionV, self.c_t1_positionV =h_t1_position, c_t1_position
-        x = h_t1_position.view(-1, self.intersize)
-        return self.ValuePNet(x)
-
-    def Deciding(self, input):
-        x = self.feature_extract(input)
-        h_t1_decide, c_t1_decide  =  self.lstmDecide(x, (self.h_t1_decide, self.c_t1_decide))
-        self.h_t1_decide, self.c_t1_decide =  h_t1_decide, c_t1_decide
-        x = h_t1_decide.view(-1, self.intersize)
-        x = self.DecidingNet(x)
-        return self.softmax(x)
-    def Value(self, input):
-        x = self.feature_extract(input)
-        h_t1_decideV,c_t1_decideV  = self.lstmDecideValue(x, (self.h_t1_decide, self.c_t1_decide))
-        self.h_t1_decideV, self.c_t1_decideV= h_t1_decideV,c_t1_decideV
-        x =  h_t1_decideV.view(-1, self.intersize)
-        return self.ValueNet(x)
+    def forward(self, x):
+        x =  F.gelu(self.fc1(F.dropout(x,p=0.1)))
+        x = self.fc2(x)
+        return x
 
 
-class VideoClassifier(nn.Module):
-    def __init__(self, input, output):
-        super(VideoClassifier, self).__init__()
-        self.classifier = nn.Sequential(nn.Linear(input,2200),
-                                        nn.GELU(),
-                                        nn.Linear(2200, 440),
-                                        nn.GELU(),
-                                        nn.Linear(440, 32),
-                                        nn.GELU(),
-                                        nn.Linear(32, output))
+class MixtureOfExperts(nn.Module):
+    def __init__(self, input_size, output_size, num_experts,feature=512):
+        super(MixtureOfExperts, self).__init__()
+        self.gating_network = GatingNetwork(input_size, num_experts,feature)
+        self.expert_networks = nn.ModuleList([ExpertNetwork(input_size, output_size,feature) for _ in range(num_experts)])
+
+    def forward(self, x):
+        gate_weights = self.gating_network(x)
+        expert_outputs = [expert(x) for expert in self.expert_networks]
+
+        # Combine expert outputs based on gate weights
+        output = torch.stack(expert_outputs, dim=-1)  # Stack expert outputs along the last dimension
+        output = torch.sum(output * gate_weights.unsqueeze(-2), dim=-1)  # Weighted sum
+
+        return output
+
+
+
+class TradingModel(nn.Module):
+    def __init__(self):
+        super(TradingModel, self).__init__()
+
+
+        self.SFT = TradingSupervisedModel()
+        self.SFT.load_state_dict(torch.load('./pretrained.pt'))
+        self.SFT.eval()
+
+        self.distribution = torch.distributions.Categorical
+        self.memory = None
+        self.MemoryInterpreter = nn.LSTM(input_size=1280,num_layers=4,hidden_size=1280)
+
+        self.Decisioner = nn.Sequential(nn.Linear(1280,32),
+                                         nn.GELU())
+        self.DecisionA = MixtureOfExperts(32,2,8,feature=16)
+        self.DecisionV = MixtureOfExperts(32,1,8,feature=16)
+
+    def PositionAction(self, input,memory_mode=False):
+        self.SFT.eval()
+        x = self.SFT.conformer(input)
+
+        H, C = self.memory[0].clone(), self.memory[1].clone()
+        _, memory = self.MemoryInterpreter(x.reshape(-1, 1280), (H,C))
+
+        if memory_mode:
+            self.memory = memory
+
+        A = F.softmax(self.SFT.Classifier(x),dim=1)
+
+        return A
+
+    def DecideAction(self, input, memory_mode=False):
+        self.SFT.eval()
+        x = self.SFT.conformer(input)
+
+        H, C = self.memory[0].clone(), self.memory[1].clone()
+        x, memory = self.MemoryInterpreter(x.reshape(-1, 1280), (H, C))
+        if memory_mode:
+            self.memory = memory
+        x = self.Decisioner(x)
+        A = F.softmax(self.DecisionA(x), dim=1)
+        value = self.DecisionV(x)
+        return A ,value
+    def SEP(self, input):
+        self.SFT.eval()
+        x = self.SFT.conformer(input)
+        return x
+    def SEP_TRAIN(self,input,memory_mode=False):
+        H, C = self.memory[0].clone(), self.memory[1].clone()
+        x, memory = self.MemoryInterpreter(input.reshape(-1, 1280), (H, C))
+        if memory_mode:
+            self.memory = memory
+        x = self.Decisioner(x)
+        A = F.softmax(self.DecisionA(x), dim=1)
+        Auxilary = self.DecisionAuxilary(x)
+        value = self.DecisionV(x)
+        return A ,Auxilary,value
+
+    def Positionpretrain(self, input):
+        return self.SFT(input)
+    def BuildMemory(self):
+        del self.memory
+        gc.collect()
+        torch.cuda.empty_cache()
+        self.memory= (torch.zeros(4,1280).cuda().detach(), torch.zeros(4,1280).cuda().detach())
+        return
+
+    def DeleteMemory(self):
+        del self.memory
+        gc.collect()
+        torch.cuda.empty_cache()
+        return
+
+
+class TradingSupervisedModel(nn.Module):
+    def __init__(self):
+        super(TradingSupervisedModel, self).__init__()
+
+        self.conformer = get_efficientnet_v2()
+        self.Classifier = nn.Sequential(nn.Linear(1280,32),
+                                         nn.BatchNorm1d(32),
+                                         nn.GELU(),
+                                         nn.Linear( 32,3))
+    def forward(self, input):
+
+        x = self.conformer(input)
+        return F.softmax(self.Classifier(x),dim=1)
+
+
+
+
+
+
+
+
+
+
+
+
+class TradingSupervisedValueModel(nn.Module):
+    def __init__(self):
+            super(TradingSupervisedValueModel, self).__init__()
+
+            self.conformer = get_efficientnet_v2()
+            self.Classifier = nn.Sequential(nn.Linear(1280, 32),
+                                            nn.BatchNorm1d(32),
+                                            nn.GELU(),
+                                            nn.Linear(32, 1))
 
     def forward(self, input):
-         return self.classifier(input)
-
-
-class TradingLSTMA2C(nn.Module):
-    def __init__(self,intersize = 8800):
-        super(TradingLSTMA2C, self).__init__()
-        self.feature_extract = nn.LSTMCell(8800,1100)
-        self.linear =  nn.Sequential(nn.Flatten(),
-                                     nn.Linear(1100,110))
-        self.intersize = intersize
-        self.PiNet = MixedActor(3)
-        self.ValuePNet = MixedActor(1)
-
-        self.DecidingNet = MixedActor(2)
-        self.ValueNet = MixedActor(1)
-        self.softmax = nn.Softmax(dim=1)
-
-    def reset_lstm(self):
-        with torch.no_grad():
-            self.h_t1_decide = self.c_t1_decide = self.h_t1_position = self.c_t1_position \
-                = self.h_t1_positionV = self.c_t1_positionV = torch.zeros(80, 1100, device='cuda')
-    def del_lstm(self):
-        del self.c_t1_position, self.c_t1_decide
-        del self.h_t1_position, self.h_t1_decide
-    def Pi(self, input):
-        input = input.reshape(-1,8800)
-        h_t1_position, c_t1_position = self.feature_extract(input,(self.h_t1_position, self.c_t1_position))
-        self.h_t1_position, self.c_t1_position= h_t1_position.clone().detach() , c_t1_position.clone().detach()
-        x= self.linear(h_t1_position)
-        x = x.reshape(-1, self.intersize)
-        x = self.PiNet(x)
-        return self.softmax(x)
-
-    def ValueP(self, input):
-        input = input.reshape(-1, 8800)
-        h_t1_positionV, c_t1_positionV = self.feature_extract(input,(self.h_t1_positionV, self.c_t1_positionV))
-        self.h_t1_positionV, self.c_t1_positionV = h_t1_positionV.clone().detach(), c_t1_positionV.clone().detach()
-        x = self.linear(h_t1_positionV)
-        x = x.reshape(-1, self.intersize)
-        return self.ValuePNet(x)
-
-    def Deciding(self, input):
-        input = input.reshape(-1, 8800)
-        h_t1_decide, c_t1_decide = self.feature_extract(input,(self.h_t1_decide, self.c_t1_decide))
-        x = self.linear(h_t1_decide)
-        self.h_t1_decide, self.c_t1_decide = h_t1_decide.clone().detach(), c_t1_decide.clone().detach()
-        x = x.reshape(-1, self.intersize)
-        x = self.DecidingNet(x)
-        return self.softmax(x)
-    def Value(self, input):
-        input = input.reshape(-1, 8800)
-        h_t1_decideV, c_t1_decideV= self.feature_extract(input,(self.h_t1_position, self.c_t1_position))
-        x= self.linear(h_t1_decideV)
-        x =  x.reshape(-1, self.intersize)
-        return self.ValueNet(x)
-
-
-class TradingConvLSTMA2C(nn.Module):
-    def __init__(self,intersize = 880):
-        super(TradingConvLSTMA2C, self).__init__()
-        self.conv = nn.Sequential(nn.Conv1d(84,35,3,stride=1),
-                                  nn.BatchNorm1d(35),
-                                  nn.Conv1d(35, 35, 3, stride=2),
-                                  nn.LeakyReLU(),
-                                  nn.Conv1d(35,11,3,stride=1),
-                                  nn.BatchNorm1d(11),
-                                  nn.Conv1d(11, 11, 3, stride=2),
-                                  nn.LeakyReLU(),
-                                  nn.Conv1d(11, 5, 3, stride=1),
-                                  nn.BatchNorm1d(5),
-                                  nn.Conv1d(5, 5, 3, stride=2),
-                                  nn.LeakyReLU())
-        self.feature_extract = nn.LSTMCell(110,11)
-        self.intersize = intersize
-        self.PiNet = MixedActor(intersize,8,3)
-        self.ValuePNet = MixedActor(intersize*3,24,1)
-
-        self.DecidingNet = MixedActor(intersize,8,2)
-        self.ValueNet = MixedActor(intersize*3,24,1)
-        self.softmax = nn.Softmax(dim=1)
-
-    def reset_lstm(self):
-        with torch.no_grad():
-            self.h_t1_decide = self.c_t1_decide = self.h_t1_position = self.c_t1_position \
-                = self.h_t1_positionV = self.c_t1_positionV =self.h_t1_decideV=self.c_t1_decideV=\
-                torch.zeros(80, 11, device='cuda')
-    def del_lstm(self):
-        del self.c_t1_position, self.c_t1_decide
-        del self.h_t1_position, self.h_t1_decide
-    def Pi(self, input):
-        x = self.conv(input.permute(0,2,1))
-        x = x.reshape(-1,110)
-        h_t1_position, c_t1_position = self.feature_extract(x,(self.h_t1_position, self.c_t1_position))
-        self.h_t1_position, self.c_t1_position= h_t1_position.clone().detach() , c_t1_position.clone().detach()
-        x = h_t1_position.reshape(-1, self.intersize)
-        x = self.PiNet(x)
-        return self.softmax(x)
-
-    def ValueP(self, input):
-        x = self.conv(input.permute(0, 2, 1))
-        x = x.reshape(-1, 110)
-        h_t1_positionV, c_t1_positionV = self.feature_extract(x,(self.h_t1_positionV, self.c_t1_positionV))
-        self.h_t1_positionV, self.c_t1_positionV = h_t1_positionV.clone().detach(), c_t1_positionV.clone().detach()
-        h_t1_position =self.h_t1_position
-        h_t1_decide =self.h_t1_decide
-        x = torch.stack([h_t1_positionV,h_t1_position,h_t1_decide])
-        x = x.reshape(-1, self.intersize*3)
-        return self.ValuePNet(x)
-
-    def Deciding(self, input):
-        x = self.conv(input.permute(0, 2, 1))
-        x = x.reshape(-1, 110)
-        h_t1_decide, c_t1_decide = self.feature_extract(x,(self.h_t1_decide, self.c_t1_decide))
-        self.h_t1_decide, self.c_t1_decide = h_t1_decide.clone().detach(), c_t1_decide.clone().detach()
-        x = h_t1_decide.reshape(-1, self.intersize)
-        x = self.DecidingNet(x)
-        return self.softmax(x)
-    def Value(self, input):
-        x = self.conv(input.permute(0, 2, 1))
-        x = x.reshape(-1, 110)
-        h_t1_decideV, c_t1_decideV= self.feature_extract(x,(self.h_t1_decideV, self.c_t1_decideV))
-        self.h_t1_decideV, self.c_t1_decideV = h_t1_decideV.clone().detach(), c_t1_decideV.clone().detach()
-        h_t1_position =self.h_t1_position
-        h_t1_decide =self.h_t1_decide
-        x = torch.stack([h_t1_decideV,h_t1_position,h_t1_decide])
-        x =  x.reshape(-1, self.intersize*3)
-        return self.ValueNet(x)
+            x = self.conformer(input)
+            return self.Classifier(x)
 
